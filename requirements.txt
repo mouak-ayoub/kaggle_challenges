@@ -9,3 +9,6 @@ evaluate
 transformers
 accelerate
 librosa
+plotly
+soundfile
+torch
