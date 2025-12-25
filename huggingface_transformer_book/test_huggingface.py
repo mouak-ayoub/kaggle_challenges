@@ -4,9 +4,8 @@ from transformers import AutoModelForSequenceClassification
 import numpy as np
 import evaluate
 from transformers import TrainingArguments
-import accelerate
 
-dataset = load_dataset("yelp_review_full")
+dataset = load_dataset("yelp_review_full", split="train[:10%]").train_test_split(test_size=0.1)
 tokenizer = AutoTokenizer.from_pretrained("google-bert/bert-base-cased")
 
 def tokenize(examples):
