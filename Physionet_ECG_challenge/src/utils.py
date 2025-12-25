@@ -5,6 +5,8 @@ import numpy as np
 from sklearn.cluster import KMeans
 import numpy as np
 from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def remove_red_grid(img_bgr: np.ndarray) -> np.ndarray:
@@ -72,7 +74,7 @@ def dataframe_to_masks_layout(
         layout_3x4=LAYOUT_3x4,
         rhythm_name: str = "II_rhythm",
         # Baseline offsets (cm) from the top y0 of each row (1..4)
-        baseline_offsets_cm={1: 1.0, 2: 2.0, 3: 1.5, 4: 1.0},
+        baseline_offsets_cm={1: 1.0, 2: 1.5, 3: 1.0, 4: 1.0},
         # Padding kept but default 0 via builder
         pad_x_units: float = 0.0,
         pad_y_cm: float = 0.0,
@@ -167,16 +169,16 @@ def build_physical_template(
         W: int,
         layout_3x4=LAYOUT_3x4,
         # Height (cm) — physical
-        total_height_cm=27.5,
+        total_height_cm=21.5,
         top_blank_cm=8.0,
-        row_heights_cm=(2.5, 4.0, 4.0),  # rows 1..3
+        row_heights_cm=(3, 4.0, 3.5),  # rows 1..3
         rhythm_height_cm=2.0,  # row 4
         bottom_blank_cm=1.0,
         # Conceptual width breakdown (only used for fractions)
-        total_width_units=28.0,
-        left_blank_units=0.0,
-        lead_width_units=7.0,  # each of 4 columns
-        right_blank_units=0.0,
+        total_width_units=27.0,
+        left_blank_units=1.5,
+        lead_width_units=6.0,  # each of 4 columns
+        right_blank_units=1.5,
         # Padding kept, default 0
         pad_y_cm=0.0,  # physical padding in y (cm)
         pad_x_units=0.0,  # padding in x in the SAME "units" as width (default 0)
@@ -256,8 +258,6 @@ def build_physical_template(
     return lead_rois, lead_x_ranges, lead_row_index, px_per_cm_y, px_per_mm_y
 
 
-import matplotlib.pyplot as plt
-import numpy as np
 
 
 def plot_all_masks_overlay(masks):

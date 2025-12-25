@@ -3,8 +3,9 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 import cv2
-
-from Physionet_ECG_challenge.src.utils import dataframe_to_masks_layout, LAYOUT_3x4
+from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from utils import dataframe_to_masks_layout, LAYOUT_3x4
 
 # ---------------------------
 # CONFIG
@@ -91,7 +92,7 @@ def process_one_ecg_folder(ecg_dir: str):
         W=len(df),
         layout_3x4=LAYOUT_3x4,
         rhythm_name=RHYTHM,
-        thickness=2,
+        thickness=4,
     )  # (H_img, len(df), 13)
 
     # Safety checks
@@ -118,25 +119,47 @@ def process_one_ecg_folder(ecg_dir: str):
 
     return True, "ok"
 
-def process_all(train_root_path,limit=None):
+
+
+
+def process_all_parallel(train_root_path, limit=None, workers=8):
     ecg_dirs = sorted([p for p in glob.glob(os.path.join(train_root_path, "*")) if os.path.isdir(p)])
     if limit is not None:
         ecg_dirs = ecg_dirs[:limit]
+        # For small runs, print the directories being processed
+        if len(ecg_dirs) <=10:
+            print("Processing only these ECG dirs:")
+            for d in ecg_dirs:
+                print(" ", d)
 
     ok, bad = 0, 0
-    for i, d in enumerate(ecg_dirs, 1):
-        success, msg = process_one_ecg_folder(d)
-        if success:
-            ok += 1
-        else:
-            bad += 1
-            print("FAIL:", d, msg)
+    fails = []
 
-        if i % 100 == 0:
-            print(f"Processed {i}/{len(ecg_dirs)} | ok={ok} bad={bad}")
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(process_one_ecg_folder, d): d for d in ecg_dirs}
+
+        for fut in tqdm(as_completed(futures), total=len(futures), desc="Processing ECGs", unit="ecg"):
+            d = futures[fut]
+            try:
+                success, msg = fut.result()
+            except Exception as e:
+                success, msg = False, f"EXCEPTION: {repr(e)}"
+
+            if success:
+                ok += 1
+            else:
+                bad += 1
+                fails.append((d, msg))
 
     print(f"DONE | ok={ok} bad={bad} total={len(ecg_dirs)}")
+    if fails:
+        print("Some failures (first 10):")
+        for d, msg in fails[:10]:
+            print("FAIL:", d, msg)
+
 
 # Example: run on a small subset first
-train_root_path = r"../data/train"  # change if needed
-process_all(train_root_path)
+
+if __name__ == "__main__":
+    train_root_path = r"../data/train"  # change if needed
+    process_all_parallel(train_root_path, limit=5, workers=2)
