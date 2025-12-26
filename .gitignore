@@ -2,3 +2,4 @@
 .idea/
 */data/*
 */submission/*
+/Physionet_ECG_challenge/models/
