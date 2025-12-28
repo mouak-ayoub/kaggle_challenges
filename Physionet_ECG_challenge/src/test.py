@@ -47,16 +47,6 @@ def save_pred_overlays(model, model_image_input: Tuple[int, int], image_paths: l
 
         # --- Compute and draw baselines ---
         baseline_rows = compute_baseline_rows(H_T)
-
-        base_with_baseline = draw_baselines(
-            base_rgb,
-            baseline_rows,
-            color=(0, 255, 255),  # cyan
-            thickness=1
-        )
-
-        # --- Compute and draw baselines ---
-        baseline_rows = compute_baseline_rows(H_T)
         base_with_baseline = draw_baselines(base_rgb, baseline_rows, color=(0, 255, 255), thickness=1)
 
         # --- Build template and draw lead ROIs (x regions) ---
@@ -81,14 +71,10 @@ def save_pred_overlays(model, model_image_input: Tuple[int, int], image_paths: l
         g = gt_union.astype(bool)
         out_gt[g] = (0.5 * out_gt[g] + 0.5 * np.array([0, 255, 0])).astype(np.uint8)
 
-
-
-
         Image.fromarray(out_pred).save(os.path.join(out_dir, f"{ecg_id}_pred.png"))
         Image.fromarray(out_gt).save(os.path.join(out_dir, f"{ecg_id}_gt.png"))
 
     return out_dir
-
 
 
 def draw_lead_regions(img_rgb, lead_rois, lead_x_ranges, color=(255, 255, 0), thickness=1, put_text=False):
@@ -100,11 +86,12 @@ def draw_lead_regions(img_rgb, lead_rois, lead_x_ranges, color=(255, 255, 0), th
     for lead, (y0, y1) in lead_rois.items():
         x0, x1 = lead_x_ranges[lead]
         # rectangle
-        cv2.rectangle(out, (int(x0), int(y0)), (int(x1)-1, int(y1)-1), color, thickness)
+        cv2.rectangle(out, (int(x0), int(y0)), (int(x1) - 1, int(y1) - 1), color, thickness)
         if put_text:
-            cv2.putText(out, str(lead), (int(x0)+3, int(y0)+15),
+            cv2.putText(out, str(lead), (int(x0) + 3, int(y0) + 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
     return out
+
 
 def load_model_checkpoint(ckpt_path: str):
     # model

@@ -69,7 +69,7 @@ def make_debug_overlay(img_gray: np.ndarray, masks_hwc: np.ndarray, alpha: float
 # ---------------------------
 # MAIN: PRECOMPUTE + SAVE
 # ---------------------------
-def process_one_ecg_folder(ecg_dir: str, overlay: bool = False,thickness: int = 4):
+def process_one_ecg_folder(ecg_dir: str, overlay: bool = False,thickness: int = 1):
     png_path, csv_path = find_png_csv(ecg_dir)
     if png_path is None:
         return False, f"Missing png/csv in {ecg_dir}"
@@ -123,7 +123,7 @@ def process_one_ecg_folder(ecg_dir: str, overlay: bool = False,thickness: int = 
 
 
 
-def process_all_parallel(train_root_path, limit=None, workers=8):
+def process_all_parallel(train_root_path, limit=None,print_overlay=False,thickness=1, workers=8):
     ecg_dirs = sorted([p for p in glob.glob(os.path.join(train_root_path, "*")) if os.path.isdir(p)])
     if limit is not None:
         ecg_dirs = ecg_dirs[:limit]
@@ -137,7 +137,7 @@ def process_all_parallel(train_root_path, limit=None, workers=8):
     fails = []
 
     with ProcessPoolExecutor(max_workers=workers) as ex:
-        futures = {ex.submit(process_one_ecg_folder, d): d for d in ecg_dirs}
+        futures = {ex.submit(process_one_ecg_folder, d,overlay=print_overlay,thickness=thickness): d for d in ecg_dirs}
 
         for fut in tqdm(as_completed(futures), total=len(futures), desc="Processing ECGs", unit="ecg"):
             d = futures[fut]
@@ -177,7 +177,7 @@ def dataframe_to_masks_layout(
         # Padding kept but default 0 via builder
         pad_x_units: float = 0.0,
         pad_y_cm: float = 0.0,
-        thickness: int = 2,
+        thickness: int = 1,
 
 ):
     """
@@ -262,6 +262,39 @@ def dataframe_to_masks_layout(
 
     return masks
 
+def compute_baseline_rows(
+        H,
+        total_height_cm=21.5,
+        top_blank_cm=8.0,
+        row_heights_cm=(3.0, 4.0, 3.5),
+        rhythm_height_cm=2.0,
+        baseline_offsets_cm={1: 1.0, 2: 1.5, 3: 1.0, 4: 1.0},
+):
+    """
+    Returns: dict row_index (1..4) -> baseline_y_px
+    """
+    px_per_cm_y = H / float(total_height_cm)
+
+    # Row top positions (cm)
+    row1_top = top_blank_cm
+    row2_top = top_blank_cm + row_heights_cm[0]
+    row3_top = top_blank_cm + row_heights_cm[0] + row_heights_cm[1]
+    row4_top = top_blank_cm + sum(row_heights_cm)  # rhythm
+
+    row_top_cm = {
+        1: row1_top,
+        2: row2_top,
+        3: row3_top,
+        4: row4_top,
+    }
+
+    baseline_y = {
+        r: int(round((row_top_cm[r] + baseline_offsets_cm[r]) * px_per_cm_y))
+        for r in row_top_cm
+    }
+
+    return baseline_y
+
 
 def build_physical_template(
         H: int,
@@ -274,9 +307,9 @@ def build_physical_template(
         rhythm_height_cm=2.0,  # row 4
         bottom_blank_cm=1.0,
         # Conceptual width breakdown (only used for fractions)
-        total_width_units=27.0,
+        total_width_units=28.0,
         left_blank_units=1.5,
-        lead_width_units=6.0,  # each of 4 columns
+        lead_width_units=6.25,  # each of 4 columns
         right_blank_units=1.5,
         # Padding kept, default 0
         pad_y_cm=0.0,  # physical padding in y (cm)
@@ -358,8 +391,5 @@ def build_physical_template(
 
 
 
-# Example: run on a small subset first
 
-if __name__ == "__main__":
-    train_root_path = r"../data/train"  # change if needed
-    process_all_parallel(train_root_path, limit=5, workers=2)
+
