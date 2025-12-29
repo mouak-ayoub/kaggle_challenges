@@ -1,49 +1,97 @@
+model_path = "../models/best_unet_resnet34_halfres_thickness_8.pt"
+base_path = "../data/test"
+ecg_metadata_path = "../data/test.csv"
+output_path = "../data/submission.csv"
+
 from pathlib import Path
-
+import numpy as np
 import pandas as pd
+import csv
 import config
-from mask_to_dataframe import decode_all_leads, get_model, get_logits_from_image
+from mask_to_dataframe import decode_all_leads, get_logits_from_image
+import segmentation_models_pytorch as smp
+import torch
 
-model_path = Path("..") / "models" / "best_unet_resnet34_halfres_thickness_8.pt"
-base_path = Path("..") / "data" / "test"
-ecg_metadata_path = Path("..") / "data" / "test.csv"
-submission_path = Path("..") / "data" / "submission"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def get_model(model_path):
+    K = 13  # number of channels
+
+    model = smp.Unet(
+        encoder_name="resnet34",
+        encoder_weights=None,  # IMPORTANT: None for inference
+        in_channels=1,
+        classes=K,
+    ).to(device)
+    ckpt = torch.load(
+        model_path,
+        map_location=device
+    )
+    model.load_state_dict(ckpt["model"])
+    model.eval()
+    return model
 
 LAYOUT = config.LAYOUT
 PX_PER_MM_X, PX_PER_MM_Y = config.PX_PER_MM_X, config.PX_PER_MM_Y
 
 model = get_model(str(model_path))
 meta = pd.read_csv(ecg_metadata_path)
+meta["id"] = meta["id"].astype(str)
 
-img_ids = set(meta["id"].astype(str).tolist())
+# build fs lookup once (faster than filtering df each time)
+fs_map = dict(zip(meta["id"], meta["fs"]))
 
-signals_all = {}
-for ecg_id in img_ids:
-    img_path = base_path / f"{ecg_id}.png"
+img_ids = sorted(fs_map.keys())
+print(f"processing ecgs of size {len(img_ids)}")
 
-    logits = get_logits_from_image(model, str(img_path))
+lead_order = LAYOUT["lead_names"][:-1]  # 12 leads (exclude II_rhythm)
+# You said competition wants II as the long rhythm strip:
+# We'll overwrite "II" with "II_rhythm" output below, but keep lead list as 12 leads.
 
-    row = meta[meta["id"].astype(str) == str(ecg_id)]
-    fs = int(row["fs"].iloc[0])
+def force_length(arr, n):
+    arr = np.asarray(arr, dtype=np.float32)
+    if len(arr) >= n:
+        return arr[:n]
+    out = np.zeros(n, dtype=np.float32)
+    out[:len(arr)] = arr
+    return out
 
-    signals, _signals_non_resampled = decode_all_leads(
-        logits, LAYOUT, PX_PER_MM_Y, PX_PER_MM_X, fs
-    )
+with open(output_path, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["id", "value"])
 
-    # Rename rhythm lead to standard Lead II
-    signals["II"] = signals.pop("II_rhythm")
-    signals_all[ecg_id] = signals
+    for ecg_id in img_ids:
+        img_path = f"{base_path}/{ecg_id}.png"
+        if not Path(img_path).exists():
+            raise FileNotFoundError(f"Missing image: {img_path}")
 
-lead_order = LAYOUT["lead_names"][:-1]
+        logits = get_logits_from_image(model, str(img_path))
+        fs = int(fs_map[ecg_id])
 
-rows = []
-for base_id, df in signals_all.items():
-    for lead in lead_order:
-        series = df[lead].astype(float)
-        for row_id, value in enumerate(series):
-            rows.append({"id": f"{base_id}_{row_id}_{lead}", "value": float(value)})
+        signals, _signals_non_resampled = decode_all_leads(
+            logits, LAYOUT,  PX_PER_MM_X,PX_PER_MM_Y, int(fs)
+        )
 
-submission_df = pd.DataFrame(rows, columns=["id", "value"])
-submission_df.sort_values("id", inplace=True)
-submission_df.to_csv(submission_path.with_suffix(".csv"), index=False)
-submission_df.to_parquet(submission_path.with_suffix(".parquet"), index=False)
+        fs = float(fs_map[ecg_id])
+        N_ii = int(fs * 10.0)     # floor(fs*10)
+        N_short = int(fs * 2.5)   # floor(fs*2.5)
+
+        # Lead II must be 10s rhythm
+        ii = signals["II_rhythm"] if "II_rhythm" in signals else signals["II"]
+        signals["II"] = force_length(ii, N_ii)
+
+        # All other leads must be 2.5s
+        for lead in lead_order:
+            if lead == "II":
+                continue
+            signals[lead] = force_length(signals[lead], N_short)
+
+        # Write immediately (no RAM accumulation)
+        for lead in lead_order:
+            series = signals[lead]
+            # series might be list/np array/pd Series; iterate directly
+            writer.writerows((f"{ecg_id}_{i}_{lead}", float(v)) for i, v in enumerate(series))
+
+print("Wrote:", output_path)
+
