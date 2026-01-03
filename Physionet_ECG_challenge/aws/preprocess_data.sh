@@ -1,20 +1,43 @@
 
-sudo yum install -y zip unzip
+sudo yum install -y zip unzip python3 python3-pip
+pip install kaggle awscli
+
 # For large datasets, using memory optimized with instance store volume+redhat os led to a fast download
 # Create Iam Role to upload to S3
 ############################################################
-sudo mkdir -p /data
-sudo  cd /data
+sudo mkdir -p $HOME/data
+sudo  cd $HOME/data
 sudo touch kaggle_download.log
+# 1) Create filesystem
+sudo mkfs -t ext4 -F /dev/nvme1n1
 
+# 2) Mount instance store volume
+mkdir -p /home/ec2-user/data
+sudo mount -t ext4 /dev/nvme1n1 /home/ec2-user/data
+chown ec2-user:ec2-user /home/ec2-user/data
+sudo chmod 777 /home/ec2-user/data
+df -h
 
-
+# Download data from Kaggle
 mkdir -p ~/.kaggle
 mv kaggle.json ~/.kaggle/
 chmod 600 ~/.kaggle/kaggle.json
 
 kaggle competitions download -c physionet-ecg-image-digitization
 
+
+aws s3 cp ./physionet-ecg-image-digitization.zip  \
+  s3://kaggle-challenge-ayoubmk/physionet/physionet.zip
+
+# Generate a 1h pre-signed URL (run where AWS creds exist)
+aws s3 presign s3://kaggle-challenge-ayoubmk/physionet/physionet.zip --expires-in 7200
+
+# Download using the URL (no AWS creds needed)
+wget -O /content/physionet.tar.zst.zip "<PASTE_PRESIGNED_URL_HERE>"
+
+
+##############################################################
+##############################################################
 ##############################################################
 # Extract small files and folders outside excluding (the big) train folder
 ZIP=/data/physionet-ecg-image-digitization.zip

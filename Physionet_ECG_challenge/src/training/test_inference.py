@@ -1,16 +1,21 @@
-model_path = "../models/best_unet_resnet34_halfres_thickness_8.pt"
-base_path = "../data/test"
-ecg_metadata_path = "../data/test.csv"
-output_path = "../data/submission.csv"
+model_path = "../../models/best_unet_resnet34_halfres_all_types.pt"
+base_path = "../../data/test"
+ecg_metadata_path = "../../data/test.csv"
+output_path = "../../data/submission.csv"
 
+
+from contour_detection.hough_transform import preprocess_for_model
+from training.mask_to_dataframe import decode_all_leads, get_logits_from_image
 from pathlib import Path
-import numpy as np
 import pandas as pd
 import csv
-import config
-from mask_to_dataframe import decode_all_leads, get_logits_from_image
+from config import config
 import segmentation_models_pytorch as smp
 import torch
+import numpy as np
+
+
+
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -66,7 +71,9 @@ with open(output_path, "w", newline="") as f:
         if not Path(img_path).exists():
             raise FileNotFoundError(f"Missing image: {img_path}")
 
-        logits = get_logits_from_image(model, str(img_path))
+        img_preprocessed = preprocess_for_model(img_path, final_h=config.H_T, final_w=config.W_T)
+
+        logits = get_logits_from_image(model, img_preprocessed,device)
         fs = int(fs_map[ecg_id])
 
         signals, _signals_non_resampled = decode_all_leads(

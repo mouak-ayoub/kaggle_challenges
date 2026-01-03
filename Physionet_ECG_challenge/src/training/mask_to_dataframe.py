@@ -1,8 +1,6 @@
-import cv2
-from PIL import Image
+
 import torch
 import numpy as np
-import config
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -111,11 +109,21 @@ def decode_all_leads(logits, layout, px_per_mm_x, px_per_mm_y, fs=1000):
     return signals, signals_nonresampled
 
 
-def get_logits_from_image(model, img_path):
-    H_T, W_T = config.H_T, config.W_T
-    img0 = np.array(Image.open(img_path).convert("L"), dtype=np.uint8)
-    img = cv2.resize(img0.astype(np.float32) / 255.0, (W_T, H_T), interpolation=cv2.INTER_AREA)
-    x = torch.from_numpy(img[None, None, ...]).float().to(device)
-    logits = model(x)[0].detach().cpu().numpy()  # (K,H,W)
 
+@torch.no_grad()
+def get_logits_from_image(model, g_uint8: np.ndarray, device: str):
+    """
+    g_uint8: (H,W) uint8 grayscale [0..255]
+    returns logits: (K,H,W) float32 numpy
+    """
+    if g_uint8.dtype != np.uint8:
+        # allow float inputs too, but normalize if needed
+        g = g_uint8.astype(np.float32)
+        if g.max() > 1.5:
+            g = g / 255.0
+    else:
+        g = g_uint8.astype(np.float32) / 255.0
+
+    x = torch.from_numpy(g[None, None, ...]).to(device)  # (1,1,H,W)
+    logits = model(x)[0].detach().cpu().numpy()          # (K,H,W)
     return logits

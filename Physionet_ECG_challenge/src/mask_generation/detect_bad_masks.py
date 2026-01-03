@@ -1,9 +1,10 @@
-
 import os, glob
 import numpy as np
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from mask_generation import process_one_ecg_folder
+
+from mask_generation.mask_generation import process_one_ecg_folder
+
 
 def _check_npz_crc(path: str):
     try:
@@ -13,6 +14,7 @@ def _check_npz_crc(path: str):
         return None
     except Exception as e:
         return (path, repr(e))
+
 
 def get_bad_masks_parallel(train_root: str, delete: bool = False, workers: int = 8):
     npz_files = glob.glob(os.path.join(train_root, "*", "mask-*.npz"))
@@ -45,7 +47,8 @@ def get_bad_masks_parallel(train_root: str, delete: bool = False, workers: int =
 
 
 def regenerate_missing(train_root):
-    ecg_dirs = sorted([d for d in glob.glob(os.path.join(train_root, "*")) if os.path.isdir(d)])
+    ecg_dirs = sorted(
+        [d for d in glob.glob(os.path.join(train_root, "*")) if os.path.isdir(d) and os.path.basename(d).isdigit()])
     missing = []
     for d in ecg_dirs:
         if not glob.glob(os.path.join(d, "mask-*.npz")):
@@ -56,5 +59,3 @@ def regenerate_missing(train_root):
         ok, msg = process_one_ecg_folder(d)
         if not ok:
             print("FAIL:", d, msg)
-
-

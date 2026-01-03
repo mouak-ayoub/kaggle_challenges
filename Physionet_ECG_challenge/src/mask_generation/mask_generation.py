@@ -11,14 +11,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 # ---------------------------
 
 
-
 # Output filenames inside each ECG folder
 DEBUG_PNG_NAME = "debug_overlay.png"
 
 # Fixed channel order (IMPORTANT)
-LEADS_12 = ["I","II","III","aVR","aVL","aVF","V1","V2","V3","V4","V5","V6"]
+LEADS_12 = ["I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"]
 RHYTHM = "II_rhythm"
 LEADS_13 = LEADS_12 + [RHYTHM]
+
 
 # ---------------------------
 # HELPERS
@@ -32,6 +32,7 @@ def find_png_csv(ecg_dir: str):
         return None, None
     return pngs[0], csvs[0]
 
+
 def resize_image_and_masks(masks_hwc: np.ndarray, H: int, W: int):
     """
     img_gray: (H0, W0) uint8
@@ -44,7 +45,8 @@ def resize_image_and_masks(masks_hwc: np.ndarray, H: int, W: int):
     masks_res = np.zeros((H, W, K), dtype=masks_hwc.dtype)
     for k in range(K):
         masks_res[..., k] = cv2.resize(masks_hwc[..., k], (W, H), interpolation=cv2.INTER_NEAREST)
-    return  masks_res
+    return masks_res
+
 
 def make_debug_overlay(img_gray: np.ndarray, masks_hwc: np.ndarray, alpha: float = 0.35):
     """
@@ -53,7 +55,7 @@ def make_debug_overlay(img_gray: np.ndarray, masks_hwc: np.ndarray, alpha: float
     - masks_hwc: (H,W,K) binary
     Returns RGB uint8 image.
     """
-    base = np.stack([img_gray]*3, axis=-1).astype(np.float32)
+    base = np.stack([img_gray] * 3, axis=-1).astype(np.float32)
 
     # Union of all masks
     union = (np.max(masks_hwc, axis=2) > 0).astype(np.uint8)
@@ -62,14 +64,15 @@ def make_debug_overlay(img_gray: np.ndarray, masks_hwc: np.ndarray, alpha: float
     out = base.copy()
     red = np.array([255, 0, 0], dtype=np.float32)
     m = union.astype(bool)
-    out[m] = (1 - alpha)*out[m] + alpha*red
+    out[m] = (1 - alpha) * out[m] + alpha * red
 
     return np.clip(out, 0, 255).astype(np.uint8)
+
 
 # ---------------------------
 # MAIN: PRECOMPUTE + SAVE
 # ---------------------------
-def process_one_ecg_folder(ecg_dir: str, overlay: bool = False,thickness: int = 1):
+def process_one_ecg_folder(ecg_dir: str, overlay: bool = False, thickness: int = 1):
     png_path, csv_path = find_png_csv(ecg_dir)
     if png_path is None:
         return False, f"Missing png/csv in {ecg_dir}"
@@ -97,17 +100,16 @@ def process_one_ecg_folder(ecg_dir: str, overlay: bool = False,thickness: int = 
 
     # Safety checks
 
-
     # Resize to fixed size
-    masks = resize_image_and_masks( masks, H_img, W_img)
+    masks = resize_image_and_masks(masks, H_img, W_img)
 
     # Save NPZ (training artifact)
     # Store masks as uint8 to reduce size
     masks_u8 = (masks > 0).astype(np.uint8)
     np.savez_compressed(
         os.path.join(ecg_dir, f"mask-{ecg_dir.split(os.sep)[-1]}.npz"),
-        masks=masks_u8,                 # (H,W,13)
-        leads=np.array(LEADS_13),       # channel names
+        masks=masks_u8,  # (H,W,13)
+        leads=np.array(LEADS_13),  # channel names
         H=np.array([img_gray.shape[0]]),
         W=np.array([img_gray.shape[1]]),
         version=np.array(["v1"]),
@@ -121,14 +123,13 @@ def process_one_ecg_folder(ecg_dir: str, overlay: bool = False,thickness: int = 
     return True, "ok"
 
 
-
-
-def process_all_parallel(train_root_path, limit=None,print_overlay=False,thickness=1, workers=8):
-    ecg_dirs = sorted([p for p in glob.glob(os.path.join(train_root_path, "*")) if os.path.isdir(p)])
+def process_all_parallel(train_root_path, limit=None, print_overlay=False, thickness=1, workers=8):
+    ecg_dirs = sorted([p for p in glob.glob(os.path.join(train_root_path, "*")) if
+                       (os.path.isdir(p) and os.path.basename(p).isdigit())])
     if limit is not None:
         ecg_dirs = ecg_dirs[:limit]
         # For small runs, print the directories being processed
-        if len(ecg_dirs) <=10:
+        if len(ecg_dirs) <= 10:
             print("Processing only these ECG dirs:")
             for d in ecg_dirs:
                 print(" ", d)
@@ -137,7 +138,8 @@ def process_all_parallel(train_root_path, limit=None,print_overlay=False,thickne
     fails = []
 
     with ProcessPoolExecutor(max_workers=workers) as ex:
-        futures = {ex.submit(process_one_ecg_folder, d,overlay=print_overlay,thickness=thickness): d for d in ecg_dirs}
+        futures = {ex.submit(process_one_ecg_folder, d, overlay=print_overlay, thickness=thickness): d for d in
+                   ecg_dirs}
 
         for fut in tqdm(as_completed(futures), total=len(futures), desc="Processing ECGs", unit="ecg"):
             d = futures[fut]
@@ -261,6 +263,7 @@ def dataframe_to_masks_layout(
         masks[..., k] = ch.astype(np.float32)
 
     return masks
+
 
 def compute_baseline_rows(
         H,
@@ -388,8 +391,3 @@ def build_physical_template(
     lead_row_index[rhythm_name] = 4
 
     return lead_rois, lead_x_ranges, lead_row_index, px_per_cm_y, px_per_mm_y
-
-
-
-
-

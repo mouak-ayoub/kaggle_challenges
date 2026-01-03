@@ -1,17 +1,19 @@
 import numpy as np
 import pandas as pd
 
-import config
-from mask_generation import process_all_parallel
-from mask_to_dataframe import  get_logits_from_image, decode_all_leads
-from metrics import plot_leads_compare_dynamic, ecg_snr_db, fit_gain_offset, align_by_xcorr, plot_nonresampled_signal
+from config import config
+from contour_detection.hough_transform import preprocess_for_model
+from mask_generation.mask_generation import process_all_parallel
+from training.mask_to_dataframe import  get_logits_from_image, decode_all_leads
+from training.metrics import plot_leads_compare_dynamic, ecg_snr_db, fit_gain_offset, align_by_xcorr, plot_nonresampled_signal
 import segmentation_models_pytorch as smp
 import torch
+
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def get_model(model_path):
+def get_model(model_path, eval=True):
     K = 13  # number of channels
 
     model = smp.Unet(
@@ -25,7 +27,8 @@ def get_model(model_path):
         map_location=device
     )
     model.load_state_dict(ckpt["model"])
-    model.eval()
+    if eval:
+     model.eval()
     return model
 
 if __name__ == "__main__":
@@ -36,11 +39,11 @@ if __name__ == "__main__":
     is_test_dataset = False
 
     if preprocess:
-        train_root_path = r"../data/train"  # change if needed
-        process_all_parallel(train_root_path, limit=5,print_overlay=True,thickness=2, workers=2)
+        train_path = "../data/sample"
+        process_all_parallel(train_path,print_overlay=True,thickness=config.THICKNESS, workers=1)
 
     if inference:
-        model_path="../models/best_unet_resnet34_halfres_thickness_8.pt"
+        model_path="../models/best_unet_resnet34_halfres_all_types.pt"
         model = get_model(model_path)
 
 
@@ -54,8 +57,9 @@ if __name__ == "__main__":
             img_path = f"{base_path}/{ecg_id}/{ecg_id}-0012.png"
             ecg_metadata_path = "../data/train.csv"
 
+        img_preprocessed = preprocess_for_model(img_path, final_h=config.H_T, final_w=config.W_T)
 
-        logits = get_logits_from_image(model, img_path)
+        logits = get_logits_from_image(model, img_preprocessed,device)
 
         # Transform masks to signals
 

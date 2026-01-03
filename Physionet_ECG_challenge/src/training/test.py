@@ -7,7 +7,7 @@ import cv2
 import torch
 import segmentation_models_pytorch as smp
 
-from mask_generation import build_physical_template
+from mask_generation.mask_generation import compute_baseline_rows, build_physical_template
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -112,38 +112,6 @@ def load_model_checkpoint(ckpt_path: str):
     return model
 
 
-def compute_baseline_rows(
-        H,
-        total_height_cm=21.5,
-        top_blank_cm=8.0,
-        row_heights_cm=(3.0, 4.0, 3.5),
-        rhythm_height_cm=2.0,
-        baseline_offsets_cm={1: 1.0, 2: 1.5, 3: 1.0, 4: 1.0},
-):
-    """
-    Returns: dict row_index (1..4) -> baseline_y_px
-    """
-    px_per_cm_y = H / float(total_height_cm)
-
-    # Row top positions (cm)
-    row1_top = top_blank_cm
-    row2_top = top_blank_cm + row_heights_cm[0]
-    row3_top = top_blank_cm + row_heights_cm[0] + row_heights_cm[1]
-    row4_top = top_blank_cm + sum(row_heights_cm)  # rhythm
-
-    row_top_cm = {
-        1: row1_top,
-        2: row2_top,
-        3: row3_top,
-        4: row4_top,
-    }
-
-    baseline_y = {
-        r: int(round((row_top_cm[r] + baseline_offsets_cm[r]) * px_per_cm_y))
-        for r in row_top_cm
-    }
-
-    return baseline_y
 
 
 def draw_baselines(img_rgb, baseline_rows, color=(0, 255, 255), thickness=1):
@@ -164,8 +132,8 @@ def draw_baselines(img_rgb, baseline_rows, color=(0, 255, 255), thickness=1):
 if __name__ == "__main__":
     H_T = 864
     W_T = 1120
-    model_out = load_model_checkpoint("../models/best_unet_resnet34_halfres_thickness_8.pt")
-    base_img_path = "../data/sample"
+    model_out = load_model_checkpoint("../../models/best_unet_resnet34_halfres_all_types.pt")
+    base_img_path = "../../data/sample"
     image_paths = [f"{base_img_path}/1006427285"]
-    out_dir = save_pred_overlays(model_out, (H_T, W_T), image_paths, out_dir="../data/sample/out")
+    out_dir = save_pred_overlays(model_out, (H_T, W_T), image_paths, out_dir="../../data/sample/out")
     print("Saved to:", out_dir)

@@ -1,6 +1,4 @@
-from mask_generation import build_physical_template, compute_baseline_rows
-
-
+from mask_generation.mask_generation import compute_baseline_rows, build_physical_template
 
 H_T = 864
 W_T = 1120
@@ -8,7 +6,7 @@ total_height_mm = 215.0
 total_width_mm = 280.0
 PX_PER_MM_Y = H_T / float(total_height_mm)
 PX_PER_MM_X = W_T / float(total_width_mm)
-
+THICKNESS=3
 baselines_per_row = compute_baseline_rows(H_T)
 _, lead_x_ranges, _, _, _ = build_physical_template(H_T, W_T)
 
