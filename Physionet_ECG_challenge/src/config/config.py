@@ -1,12 +1,36 @@
 from mask_generation.mask_generation import compute_baseline_rows, build_physical_template
 
+# Allowed training segment types (suffix in: train/[id]/[id]-[segment].png)
+training_allowed_types = {"0001", "0003", "0004", "0005", "0006", "0009", "0010", "0011", "0012"}
+
+# segment_code -> simplified slug
+libelle_type = {
+    "0001": "original_color",
+    "0003": "print_scan_color",
+    "0004": "print_scan_black_white",
+    "0005": "mobile_photo_printed_color_table_background",
+    "0006": "mobile_photo_screen_laptop",
+    "0009": "stained_soaked_printed",
+    "0010": "extensive_damage_printed",
+    "0011": "mold_color",
+    "0012": "mold_black_white",
+}
+HARD_TYPES = ["0004", "0005", "0006", "0009", "0010", "0011", "0012"]
+TYPE_WEIGHTS = {"0005": 4.0, "0010": 4.0,
+                "0006": 3.0, "0009": 2.0,
+                "0011": 2.0, "0012": 2.0,
+                "0004": 1.5, "0003": 1.0,
+                "0001": 0.5}
+# simplified slug -> segment_code
+map_type_libelle = {v: k for k, v in libelle_type.items()}
+
 H_T = 864
 W_T = 1120
 total_height_mm = 215.0
 total_width_mm = 280.0
 PX_PER_MM_Y = H_T / float(total_height_mm)
 PX_PER_MM_X = W_T / float(total_width_mm)
-THICKNESS=3
+THICKNESS = 3
 baselines_per_row = compute_baseline_rows(H_T)
 _, lead_x_ranges, _, _, _ = build_physical_template(H_T, W_T)
 

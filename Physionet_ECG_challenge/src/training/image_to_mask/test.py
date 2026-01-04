@@ -132,8 +132,8 @@ def draw_baselines(img_rgb, baseline_rows, color=(0, 255, 255), thickness=1):
 if __name__ == "__main__":
     H_T = 864
     W_T = 1120
-    model_out = load_model_checkpoint("../../models/best_unet_resnet34_halfres_all_types.pt")
-    base_img_path = "../../data/sample"
+    model_out = load_model_checkpoint("../../../models/best_unet_resnet34_halfres_all_types.pt")
+    base_img_path = "../../../data/sample"
     image_paths = [f"{base_img_path}/1006427285"]
-    out_dir = save_pred_overlays(model_out, (H_T, W_T), image_paths, out_dir="../../data/sample/out")
+    out_dir = save_pred_overlays(model_out, (H_T, W_T), image_paths, out_dir="../../../data/sample/out")
     print("Saved to:", out_dir)

@@ -1,7 +1,6 @@
 import os, glob
 import random
 import traceback
-import time
 
 import numpy as np
 import cv2

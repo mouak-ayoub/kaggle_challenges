@@ -5,6 +5,9 @@ import shutil
 
 from PIL import Image
 
+from config import config
+import torch
+
 
 # ----------------------------
 # geometry helpers
@@ -200,6 +203,7 @@ def draw_hough_lines(gray_u8, out_path,
     cv2.imwrite(out_path, vis)
     return n
 
+
 def crop_by_ink_bbox(warped_bgr, debug_dir=None, name="02e_crop_ink",
                      consec=12, pad=25,
                      min_w_frac=0.82, min_h_frac=0.80,
@@ -216,8 +220,8 @@ def crop_by_ink_bbox(warped_bgr, debug_dir=None, name="02e_crop_ink",
     H, S, V = cv2.split(hsv)
 
     # adaptive thresholds from center (robust to exposure + coffee)
-    y0, y1 = int(0.20*h), int(0.80*h)
-    x0, x1 = int(0.20*w), int(0.80*w)
+    y0, y1 = int(0.20 * h), int(0.80 * h)
+    x0, x1 = int(0.20 * w), int(0.80 * w)
     S_c = S[y0:y1, x0:x1].astype(np.float32).reshape(-1)
     V_c = V[y0:y1, x0:x1].astype(np.float32).reshape(-1)
 
@@ -250,7 +254,7 @@ def crop_by_ink_bbox(warped_bgr, debug_dir=None, name="02e_crop_ink",
 
     def first_run_from_end(arr, thr, consec):
         run = 0
-        for k in range(len(arr)-1, -1, -1):
+        for k in range(len(arr) - 1, -1, -1):
             v = arr[k]
             run = run + 1 if v >= thr else 0
             if run >= consec:
@@ -276,7 +280,7 @@ def crop_by_ink_bbox(warped_bgr, debug_dir=None, name="02e_crop_ink",
     else:
         bottom = min(h - 1, bottom + pad)
 
-    cropped = warped_bgr[top:bottom+1, left:right+1].copy()
+    cropped = warped_bgr[top:bottom + 1, left:right + 1].copy()
 
     # regression guards
     if cropped.shape[1] < min_w_frac * w:
@@ -293,6 +297,7 @@ def crop_by_ink_bbox(warped_bgr, debug_dir=None, name="02e_crop_ink",
         cv2.imwrite(os.path.join(debug_dir, f"{name}.png"), cropped)
 
     return cropped
+
 
 def trim_top_by_redgrid(img_bgr, debug_dir=None, name="02f_trim_top_redgrid",
                         a_thr=135, L_thr=60, k=31,
@@ -324,7 +329,7 @@ def trim_top_by_redgrid(img_bgr, debug_dir=None, name="02f_trim_top_redgrid",
     row_red = red_hv.mean(axis=1)
 
     # adaptive threshold from center rows
-    y0, y1 = int(0.25*h), int(0.75*h)
+    y0, y1 = int(0.25 * h), int(0.75 * h)
     q95 = float(np.percentile(row_red[y0:y1], 95))
     thr = max(min_thr, thr_frac * q95)
 
@@ -346,11 +351,13 @@ def trim_top_by_redgrid(img_bgr, debug_dir=None, name="02f_trim_top_redgrid",
     if debug_dir:
         os.makedirs(debug_dir, exist_ok=True)
         vis = img_bgr.copy()
-        cv2.line(vis, (0, top), (w-1, top), (0, 0, 255), 3)
+        cv2.line(vis, (0, top), (w - 1, top), (0, 0, 255), 3)
         cv2.imwrite(os.path.join(debug_dir, f"{name}_line.png"), vis)
         cv2.imwrite(os.path.join(debug_dir, f"{name}.png"), out)
 
     return out
+
+
 def micro_trim_left_safe(img_bgr, debug_dir=None, name="02g_micro_left",
                          max_frac=0.02, consec=8, pad=2):
     """
@@ -369,8 +376,8 @@ def micro_trim_left_safe(img_bgr, debug_dir=None, name="02g_micro_left",
     chroma = np.sqrt((a - 128.0) ** 2 + (b - 128.0) ** 2)
 
     # adaptive thresholds from center area
-    y0, y1 = int(0.25*h), int(0.75*h)
-    x0, x1 = int(0.20*w), int(0.80*w)
+    y0, y1 = int(0.25 * h), int(0.75 * h)
+    x0, x1 = int(0.20 * w), int(0.80 * w)
     Lc = L[y0:y1, x0:x1].reshape(-1)
     Cc = chroma[y0:y1, x0:x1].reshape(-1)
 
@@ -380,7 +387,7 @@ def micro_trim_left_safe(img_bgr, debug_dir=None, name="02g_micro_left",
 
     # "paper-ish" thresholds (soft)
     L_thr = max(20.0, L_med - 50.0)
-    C_thr = min(30.0, C_med + 4.0*C_mad + 3.0)
+    C_thr = min(30.0, C_med + 4.0 * C_mad + 3.0)
 
     good = (L >= L_thr) & (chroma <= C_thr)
     col_good = good.mean(axis=0)
@@ -408,11 +415,12 @@ def micro_trim_left_safe(img_bgr, debug_dir=None, name="02g_micro_left",
     if debug_dir:
         os.makedirs(debug_dir, exist_ok=True)
         vis = img_bgr.copy()
-        cv2.line(vis, (left, 0), (left, h-1), (0, 0, 255), 3)
+        cv2.line(vis, (left, 0), (left, h - 1), (0, 0, 255), 3)
         cv2.imwrite(os.path.join(debug_dir, f"{name}_line.png"), vis)
         cv2.imwrite(os.path.join(debug_dir, f"{name}.png"), out)
 
     return out
+
 
 # ----------------------------
 # MAIN PIPELINE
@@ -473,7 +481,6 @@ def rectify_and_clean(
         # fallback keeps your previously working behavior
         warped_trim = crop_fixed_margin(warped_big, shrink=shrink)
 
-
     # NEW: remove macOS/Windows top bar without touching bottom
     warped_trim = trim_top_by_redgrid(warped_trim, debug_dir=debug_dir)
 
@@ -496,17 +503,22 @@ def rectify_and_clean(
 
     return warped_final, scan_like
 
+
 def fallback_gray(img_path, final_h, final_w):
     img0 = np.array(Image.open(img_path).convert("L"), dtype=np.uint8)
     return cv2.resize(img0, (final_w, final_h), interpolation=cv2.INTER_AREA)
 
-def preprocess_for_model(img_path, final_h, final_w, stats=None):
+
+def preprocess_for_model(img_path, final_h, final_w, rectify=True, stats=None):
     """
     Returns uint8 gray (final_h, final_w).
     Tries rectify_and_clean; on any exception/None output -> fallback.
     stats: dict counters only (no filenames).
     """
     try:
+        if not rectify:
+            print(f"Preprocess without rectification: {img_path}")
+            return fallback_gray(img_path, final_h, final_w)
         out = rectify_and_clean(img_path=img_path, debug_dir=None, final_w=final_w, final_h=final_h)
 
         if out is None:
@@ -529,6 +541,16 @@ def preprocess_for_model(img_path, final_h, final_w, stats=None):
         if stats is not None: stats["exception"] = stats.get("exception", 0) + 1
         return fallback_gray(img_path, final_h, final_w)
 
+
+def canon_u8(img_path, final_h=config.H_T, final_w=config.W_T):
+    # returns uint8 (H,W)
+    g = preprocess_for_model(img_path, final_h=final_h, final_w=final_w, rectify=True, stats=None)
+    return g
+
+def canon_tensor(img_path, final_h=config.H_T, final_w=config.W_T):
+    g = canon_u8(img_path, final_h, final_w).astype(np.float32) / 255.0
+    x = torch.from_numpy(g)[None, ...]          # [1,H,W]
+    return x
 
 
 if __name__ == "__main__":

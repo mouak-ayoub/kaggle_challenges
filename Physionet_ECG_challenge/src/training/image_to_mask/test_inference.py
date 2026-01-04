@@ -1,11 +1,11 @@
-model_path = "../../models/best_unet_resnet34_halfres_all_types.pt"
-base_path = "../../data/test"
-ecg_metadata_path = "../../data/test.csv"
-output_path = "../../data/submission.csv"
+model_path = "../../../models/best_unet_resnet34_halfres_all_types.pt"
+base_path = "../../../data/test"
+ecg_metadata_path = "../../../data/test.csv"
+output_path = "../../../data/submission.csv"
 
 
 from contour_detection.hough_transform import preprocess_for_model
-from training.mask_to_dataframe import decode_all_leads, get_logits_from_image
+from training.image_to_mask.mask_to_dataframe import decode_all_leads, get_logits_from_image
 from pathlib import Path
 import pandas as pd
 import csv
