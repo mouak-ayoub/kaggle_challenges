@@ -36,14 +36,58 @@ class CoordinateMappingResult:
 
 @dataclass
 class StandardHoughResult:
-    """Accumulator and dominant peaks from the standard Hough transform."""
+    """Accumulator plus optional smoothed view and peak locations."""
 
     accumulator: np.ndarray
+    smoothed_accumulator: np.ndarray | None
     angles: np.ndarray
     distances: np.ndarray
     peak_accumulator: np.ndarray
     peak_angles: np.ndarray
     peak_distances: np.ndarray
+    peak_values: np.ndarray
+
+
+@dataclass
+class HoughThresholdEntry:
+    """One threshold-qualified accumulator bin with its image-space line segment."""
+
+    entry_index: int
+    rho_idx: int
+    theta_idx: int
+    rho: float
+    theta: float
+    theta_deg: float
+    value: float
+    segment: tuple[tuple[float, float], tuple[float, float]]
+
+
+@dataclass
+class HoughLineFamily:
+    """One angle family of threshold-qualified Hough lines."""
+
+    name: str
+    center_theta_deg: float
+    tolerance_deg: float
+    reference_theta_deg: float
+    entries: list[HoughThresholdEntry] = field(default_factory=list)
+    min_entry: HoughThresholdEntry | None = None
+    max_entry: HoughThresholdEntry | None = None
+
+
+@dataclass
+class HoughBoundaryGridDetectionResult:
+    """Reusable outputs of the threshold-qualified Hough boundary-grid method."""
+
+    energy: EnergyBuildResult
+    edges: np.ndarray
+    hough: StandardHoughResult
+    threshold_reference: np.ndarray
+    threshold_reference_name: str
+    effective_threshold_value: float
+    threshold_entries: list[HoughThresholdEntry] = field(default_factory=list)
+    dominant_family: HoughLineFamily | None = None
+    perpendicular_family: HoughLineFamily | None = None
 
 
 @dataclass

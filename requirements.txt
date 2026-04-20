@@ -10,5 +10,9 @@ transformers
 accelerate
 librosa
 plotly
+nbformat>=4.2.0
 soundfile
 torch
+scikit-image
+optuna
+opencv-python

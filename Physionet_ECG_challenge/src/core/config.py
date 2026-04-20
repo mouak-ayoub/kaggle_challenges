@@ -99,6 +99,12 @@ class StandardHoughConfig:
 
     theta_step_degrees: float = 0.3
     n_peaks: int = 70
+    peak_threshold_ratio: float = 0.40
+    min_distance: int = 9
+    min_angle: int = 10
+    smooth_accumulator: bool = False
+    accumulator_gaussian_sigma_rho: float = 2.0
+    accumulator_gaussian_sigma_theta: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -109,3 +115,21 @@ class ProbabilisticHoughConfig:
     threshold: int = 10
     line_length: int = 80
     line_gap: int = 8
+
+
+@dataclass(frozen=True)
+class HoughBoundaryGridConfig:
+    """Grouped config for the threshold-qualified Hough boundary-grid method."""
+
+    resize: ResizeConfig = field(default_factory=ResizeConfig)
+    enhancement: EnhancementConfig = field(default_factory=EnhancementConfig)
+    energy: EnergyConfig = field(
+        default_factory=lambda: EnergyConfig(
+            mode="canny",
+            post_brighten_mode="none",
+            post_brighten_gamma=1.0,
+        )
+    )
+    standard_hough: StandardHoughConfig = field(default_factory=StandardHoughConfig)
+    primary_theta_tolerance_deg: float = 5.0
+    perpendicular_theta_tolerance_deg: float = 3.0

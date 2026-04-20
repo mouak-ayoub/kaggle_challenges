@@ -64,3 +64,36 @@ The first obvious refactor targets are:
 - polygon mask generation from the page contour
 - Hough line detection and line-to-segment conversion
 - Optuna study setup and page-scoring helpers for notebook search
+
+## Current Hough Notes
+
+- `src/fitting/hough_lines.py` now returns:
+  - `peak_accumulator` as a sparse accumulator-shaped map
+  - `peak_values` as the raw peak heights returned by `skimage`
+  - `smoothed_accumulator` when Gaussian accumulator smoothing is enabled
+- `StandardHoughConfig` now supports optional accumulator smoothing before peak picking:
+  - `smooth_accumulator`
+  - `accumulator_gaussian_sigma_rho`
+  - `accumulator_gaussian_sigma_theta`
+- `StandardHoughConfig` also now exposes peak-picking parameters instead of relying on `skimage` defaults:
+  - `peak_threshold_ratio`
+  - `min_distance`
+  - `min_angle`
+- In the notebook workflow, dominant-theta and perpendicular-theta family extraction are now treated as stable boundary-grid logic, separate from the temporary left-border debug section.
+- In that stable notebook workflow, the main boundary-grid grouping now uses all accumulator bins above the effective threshold rather than the `n_peaks`-limited returned-peak list.
+- That stable notebook workflow now also computes rho min/max envelopes from the selected dominant and perpendicular families, with a top-level notebook tolerance parameter and a plotting cell for the expanded boundary lines.
+- The threshold-qualified Hough boundary-grid logic has now been extracted into reusable `src` code:
+  - grouped config: `HoughBoundaryGridConfig`
+  - pipeline: `run_hough_boundary_grid_detection`
+  - reusable result types for threshold-qualified bins, line families, and the selected extreme boundary lines
+- The unitary and batch Hough notebooks now both consume that shared boundary-grid selection path:
+  - the unitary notebook keeps only notebook-specific debug and visualization code
+  - the preview notebook uses the same method on random sample pairs for batch inspection
+- The notebook-side Hough debugging remains outside `src` for now because it is still exploratory plotting logic.
+- The current external debug helper lives in:
+  - `scripts/debug_hough_3d_window.py`
+  - it now supports Plotly browser/HTML output in addition to Matplotlib
+- If the Hough debug workflow stabilizes, the next reusable extraction candidates are:
+  - peak-family selection helpers
+  - accumulator-bin lookup helpers
+  - configurable red-hypothesis generation near the left page border

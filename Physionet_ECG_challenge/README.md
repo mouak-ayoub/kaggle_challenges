@@ -6,6 +6,53 @@ This document is a **project README + decision log** consolidating the work done
 
 ---
 
+## Current Milestone
+
+Current day-to-day work is focused on the classical CV boundary-detection path, especially the Hough-line notebook in `notebooks/boundary_detection`.
+
+Recent progress:
+- standard Hough outputs were clarified so we keep both:
+  - an accumulator-shaped sparse peak map
+  - the raw flat peak values returned by `skimage`
+  - an optional smoothed accumulator when peak detection is run on a Gaussian-smoothed Hough space
+- standard Hough peak picking is now explicit rather than relying on hidden library defaults:
+  - relative threshold ratio
+  - `min_distance`
+  - `min_angle`
+- the Hough notebook now has a dedicated left-border debug mode with:
+  - configurable green peak families
+  - configurable red hypotheses
+  - optional blue top accumulator peaks
+  - 2D and 3D synchronized overlays
+  - explicit `is_peak=True/False` printing for candidate lines
+- the Hough notebook now also has a stable boundary-grid section:
+  - dominant returned-theta family extraction
+  - perpendicular-family extraction for the orthogonal grid direction
+  - top-level notebook config parameters separate from `DEBUG_CFG`
+- that stable boundary-grid section now uses all accumulator bins above the effective Hough threshold:
+  - it does not depend on the `n_peaks`-capped `skimage` returned peak list
+  - this now drives the theta concentration summary and the dominant/perpendicular family grouping
+- that same stable boundary-grid section now derives rho bounds only from those selected families:
+  - a top-level `BOUNDARY_RHO_BOUND_TOLERANCE` controls the envelope expansion
+  - a dedicated notebook cell computes min/max rho per selected family and plots the tolerance-expanded boundary lines on the image
+- the threshold-qualified Hough boundary-grid method is now available as reusable `src` code:
+  - grouped config: `HoughBoundaryGridConfig`
+  - shared pipeline: `run_hough_boundary_grid_detection`
+  - reusable outputs for threshold-qualified bins, dominant/perpendicular families, and the selected extreme boundary lines
+- the unitary Hough notebook now uses that same shared boundary-grid method for line selection:
+  - it keeps the image-specific debug plots, but no longer duplicates the dominant/perpendicular family selection logic locally
+- a compact preview notebook was added to inspect the extracted method on 10 random sample pairs:
+  - `notebooks/boundary_detection/ecg_hough_boundary_grid_preview.ipynb`
+- the two Hough notebooks are now aligned on the same Hough boundary-grid parameters by default
+- an external interactive viewer was added in `scripts/debug_hough_3d_window.py`:
+  - Plotly interactive 3D can open in the browser or be saved to HTML
+  - Matplotlib external-window mode is still available as a fallback
+- the reusable `src` Hough path now supports optional accumulator smoothing through `StandardHoughConfig`
+
+This milestone is for analysis and debugging of page-edge candidates before we decide whether to relax Hough peak suppression, refine edge preprocessing, or move more of the notebook logic into reusable `src` code.
+
+---
+
 ## 0) Context
 
 We are solving **ECG image digitization**:
