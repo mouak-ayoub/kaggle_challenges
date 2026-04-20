@@ -1,0 +1,68 @@
+profiles:
+  shared_baseline:
+    rescaling:
+      max_dim: 1000
+
+    enhancement:
+      gaussian_sigma: 0.0
+      enhancement_mode: none
+      unsharp_radius: 2.0
+      unsharp_amount: 1.5
+      # Zeroes a border of this many pixels on the edge map before voting (Used for instance in active contour model)
+      # Set to 0 here because we want to detect the true page boundary, including the outer border.
+      outer_black_border: 0
+
+    energy:
+      canny_sigma: 2.0
+      canny_low_threshold: 0.10
+      canny_high_threshold: 0.25
+
+    hough:
+      backend: skimage
+      # opencv only: passed as rho= to cv2.HoughLinesWithAccumulator.
+      rho_resolution_pixels: 1.0
+      theta_step_degrees: 1
+      peak_threshold_ratio: 0.40
+      # opencv only: when true, each edge pixel votes with its gradient magnitude instead of 1.
+      use_edge_values: false
+      smooth_accumulator: false
+      accum_sigma_rho: 0.0
+      accum_sigma_theta: 0.0
+
+    boundary:
+      primary_theta_tolerance_deg: 5.0
+      perpendicular_theta_tolerance_deg: 3.0
+
+  opencv_weighted_experimental:
+    rescaling:
+      max_dim: 1000
+
+    enhancement:
+      gaussian_sigma: 0.0
+      enhancement_mode: none
+      unsharp_radius: 2.0
+      unsharp_amount: 1.5
+      # See shared_baseline for explanation.
+      outer_black_border: 0
+
+    energy:
+      canny_sigma: 2.0
+      canny_low_threshold: 0.10
+      canny_high_threshold: 0.25
+
+    hough:
+      backend: opencv
+      # See shared_baseline for explanation (opencv only, ignored by skimage backend).
+      rho_resolution_pixels: 1.0
+      theta_step_degrees: 1
+      peak_threshold_ratio: 0.40
+      # true: each edge pixel votes with its gradient magnitude (weighted Hough).
+      # Stronger but sparser border edges can then compete with weaker but denser grid lines.
+      use_edge_values: true
+      smooth_accumulator: false
+      accum_sigma_rho: 0.0
+      accum_sigma_theta: 0.0
+
+    boundary:
+      primary_theta_tolerance_deg: 5.0
+      perpendicular_theta_tolerance_deg: 3.0

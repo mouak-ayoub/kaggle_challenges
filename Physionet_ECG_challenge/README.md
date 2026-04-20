@@ -44,6 +44,13 @@ Recent progress:
 - a compact preview notebook was added to inspect the extracted method on 10 random sample pairs:
   - `notebooks/boundary_detection/ecg_hough_boundary_grid_preview.ipynb`
 - the two Hough notebooks are now aligned on the same Hough boundary-grid parameters by default
+- those shared Hough notebook defaults now live in:
+  - `config/hough_notebooks.yaml`
+  - loaded through `src.core.load_hough_boundary_notebook_defaults`
+- the standard Hough backend is now swappable through the same YAML-backed config:
+  - `skimage` remains the default shared baseline
+  - `opencv_weighted_experimental` enables OpenCV weighted Hough with minimal pipeline churn
+  - both notebooks now switch backend/profile through a single `HOUGH_NOTEBOOK_PROFILE` variable
 - an external interactive viewer was added in `scripts/debug_hough_3d_window.py`:
   - Plotly interactive 3D can open in the browser or be saved to HTML
   - Matplotlib external-window mode is still available as a fallback

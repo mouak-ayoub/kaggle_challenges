@@ -155,17 +155,18 @@ def run_hough_boundary_grid_detection(
         resize_scale=resize_scale,
     )
     edges = final_energy > 0
-    hough_result = run_standard_hough(edges, cfg.standard_hough)
+    hough_result = run_standard_hough(final_energy, cfg.standard_hough)
     threshold_reference = (
         hough_result.smoothed_accumulator
         if hough_result.smoothed_accumulator is not None
         else hough_result.accumulator
     )
-    threshold_reference_name = (
-        "smoothed accumulator"
-        if hough_result.smoothed_accumulator is not None
-        else "raw accumulator"
-    )
+    if hough_result.smoothed_accumulator is not None:
+        threshold_reference_name = "smoothed accumulator"
+    elif cfg.standard_hough.backend == "opencv":
+        threshold_reference_name = "OpenCV sparse accumulator"
+    else:
+        threshold_reference_name = "raw accumulator"
     effective_threshold_value = float(
         cfg.standard_hough.peak_threshold_ratio * np.max(threshold_reference)
     )

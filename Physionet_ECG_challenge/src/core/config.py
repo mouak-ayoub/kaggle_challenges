@@ -5,6 +5,7 @@ EnhancementMode = Literal["none", "unsharp"]
 EnergyMode = Literal["gaussian", "sobel", "sobel_binary", "canny", "laplace_abs", "laplace_abs_inv"]
 PostEnergyMode = Literal["none", "gamma"]
 BoundaryCondition = Literal["periodic", "free", "fixed", "free-fixed", "fixed-free"]
+StandardHoughBackend = Literal["skimage", "opencv"]
 
 
 @dataclass(frozen=True)
@@ -97,11 +98,16 @@ class PageScorePriors:
 class StandardHoughConfig:
     """Parameters for the standard Hough transform and peak selection."""
 
+    backend: StandardHoughBackend = "skimage"
+    # opencv only: passed as rho= to cv2.HoughLinesWithAccumulator.
+    # Ignored by the skimage backend, which always uses 1-pixel rho resolution internally.
+    rho_resolution_pixels: float = 1.0
     theta_step_degrees: float = 0.3
     n_peaks: int = 70
     peak_threshold_ratio: float = 0.40
     min_distance: int = 9
     min_angle: int = 10
+    opencv_use_edge_values: bool = False
     smooth_accumulator: bool = False
     accumulator_gaussian_sigma_rho: float = 2.0
     accumulator_gaussian_sigma_theta: float = 1.0

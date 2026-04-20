@@ -58,9 +58,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ecg-id", default="11842146")
     parser.add_argument("--scan-type", default="0005")
     parser.add_argument("--max-dim", type=int, default=1000)
+    parser.add_argument("--hough-backend", choices=["skimage", "opencv"], default="skimage")
+    parser.add_argument("--hough-rho-resolution-pixels", type=float, default=1.0)
     parser.add_argument("--hough-peak-threshold-ratio", type=float, default=0.40)
     parser.add_argument("--hough-min-distance", type=int, default=9)
     parser.add_argument("--hough-min-angle", type=int, default=10)
+    parser.add_argument("--hough-opencv-use-edge-values", action="store_true")
     parser.add_argument("--viewer", choices=["plotly", "matplotlib"], default="plotly")
     parser.add_argument("--backend", default=None, help="Preferred Matplotlib GUI backend, for example QtAgg or TkAgg.")
     parser.add_argument(
@@ -81,7 +84,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--green-rho-min-spacing-bins", type=int, default=2)
     parser.add_argument("--red-target-theta-deg", type=float, default=3.0)
     parser.add_argument("--red-angle-tolerance-deg", type=float, default=0.1)
-    parser.add_argument("--red-rho-step-bins", type=int, default=2)
+    parser.add_argument("--red-rho-delta", type=float, default=15.0)
     parser.add_argument("--red-center-rho", type=float, default=None)
     parser.add_argument("--left-search-width-frac", type=float, default=0.12)
     parser.add_argument("--top-accumulator-line-count", type=int, default=5)
@@ -188,20 +191,60 @@ def top_accumulator_entries(entries: list[dict[str, object]], count: int) -> lis
     return ranked[:count]
 
 
-def symmetric_rho_indices(center_idx: int, n_bins: int, count: int, step_bins: int) -> list[int]:
-    offsets = [0]
-    level = 1
-    while len(offsets) < max(1, count):
-        offsets.extend([-level * step_bins, level * step_bins])
-        level += 1
-    picked: list[int] = []
-    for offset in offsets:
-        idx = center_idx + offset
-        if 0 <= idx < n_bins and idx not in picked:
-            picked.append(idx)
-        if len(picked) == count:
-            break
-    return picked
+def red_entries_in_window(
+    result: StandardHoughResult,
+    peak_bin_set: set[tuple[int, int]],
+    image_shape: tuple[int, int],
+    center_rho: float,
+    rho_delta: float,
+    target_theta_deg: float,
+    theta_delta_deg: float,
+) -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+    for rho in result.distances:
+        rho = float(rho)
+        if abs(rho - center_rho) > rho_delta:
+            continue
+        for theta in result.angles:
+            theta = float(theta)
+            theta_deg = float(np.rad2deg(theta))
+            if abs(theta_deg - target_theta_deg) > theta_delta_deg:
+                continue
+            segment = line_segment_from_rho_theta(rho, theta, image_shape)
+            if segment is None:
+                continue
+            stats = accumulator_lookup(result, rho, theta)
+            entries.append(
+                {
+                    "is_peak": (int(stats["rho_idx"]), int(stats["theta_idx"])) in peak_bin_set,
+                    "segment": segment,
+                    "rho": rho,
+                    "rho_idx": int(stats["rho_idx"]),
+                    "theta": theta,
+                    "theta_deg": theta_deg,
+                    "stats": stats,
+                }
+            )
+    return entries
+
+
+def pick_red_entries_from_window(
+    entries: list[dict[str, object]],
+    center_rho: float,
+    target_theta_deg: float,
+    count: int,
+) -> list[dict[str, object]]:
+    ranked = sorted(
+        entries,
+        key=lambda entry: (
+            abs(float(entry["theta_deg"]) - target_theta_deg),
+            abs(float(entry["rho"]) - center_rho),
+            -float(entry["stats"]["value"]),
+            float(entry["rho"]),
+            float(entry["theta_deg"]),
+        ),
+    )
+    return ranked[:count]
 
 
 def red_theta_from_cfg(result, vertical_green_entries: list[dict[str, object]], red_target_theta_deg: float | None) -> tuple[float, float]:
@@ -389,18 +432,23 @@ def main() -> None:
     )
     theta_step_degrees = round(args.max_dim / 500)
     standard_hough_cfg = StandardHoughConfig(
+        backend=args.hough_backend,
+        rho_resolution_pixels=args.hough_rho_resolution_pixels,
         theta_step_degrees=theta_step_degrees,
         n_peaks=round(args.max_dim / 25),
         peak_threshold_ratio=args.hough_peak_threshold_ratio,
         min_distance=args.hough_min_distance,
         min_angle=args.hough_min_angle,
+        opencv_use_edge_values=args.hough_opencv_use_edge_values,
     )
 
     rgb_img, image_path = load_sample_rgb_image(sample_root, args.ecg_id, args.scan_type)
     gray_img = rgb_to_gray_unit(rgb_img)
     resized_gray, scale = resize_keep_aspect(gray_img, resize_cfg.max_dim)
-    _, _, _, edges = build_energy_image(resized_gray, enhancement_cfg, energy_cfg)
-    standard_hough_result = run_standard_hough(edges, standard_hough_cfg)
+    _, _, _, final_energy = build_energy_image(resized_gray, enhancement_cfg, energy_cfg)
+    edges = final_energy > 0
+    standard_hough_result = run_standard_hough(final_energy, standard_hough_cfg)
+    effective_min_accumulator_value = float(args.hough_peak_threshold_ratio) * float(np.max(standard_hough_result.accumulator))
 
     green_angle_tolerance_deg = (
         args.green_angle_tolerance_deg
@@ -481,33 +529,34 @@ def main() -> None:
         left_vote_hist = None
         best_left_rho_idx = int(np.argmin(np.abs(standard_hough_result.distances - float(args.red_center_rho))))
 
-    red_rho_indices = symmetric_rho_indices(
-        best_left_rho_idx,
-        standard_hough_result.distances.size,
-        count=args.red_line_count,
-        step_bins=max(1, args.red_rho_step_bins),
+    red_center_rho_value = float(standard_hough_result.distances[best_left_rho_idx])
+    red_rho_delta = max(0.0, float(args.red_rho_delta))
+    red_theta_delta_deg = max(0.0, float(args.red_angle_tolerance_deg))
+
+    red_debug_lines_raw = red_entries_in_window(
+        standard_hough_result,
+        peak_bin_set,
+        resized_gray.shape,
+        center_rho=red_center_rho_value,
+        rho_delta=red_rho_delta,
+        target_theta_deg=red_theta_deg,
+        theta_delta_deg=red_theta_delta_deg,
     )
 
-    red_debug_lines: list[dict[str, object]] = []
-    for idx, rho_idx in enumerate(red_rho_indices, start=1):
-        rho = float(standard_hough_result.distances[rho_idx])
-        segment = line_segment_from_rho_theta(rho, red_theta, resized_gray.shape)
-        if segment is None:
-            continue
-        stats = accumulator_lookup(standard_hough_result, rho, red_theta)
-        red_debug_lines.append(
-            {
-                "is_peak": (rho_idx, int(stats["theta_idx"])) in peak_bin_set,
-                "label": f"RED left {idx}",
-                "short_label": f"R{idx}",
-                "segment": segment,
-                "rho": rho,
-                "rho_idx": rho_idx,
-                "theta": red_theta,
-                "theta_deg": red_theta_deg,
-                "stats": stats,
-            }
-        )
+    red_window_lines = [
+        entry
+        for entry in red_debug_lines_raw
+        if float(entry["stats"]["value"]) >= effective_min_accumulator_value
+    ]
+    red_debug_lines = pick_red_entries_from_window(
+        red_window_lines,
+        center_rho=red_center_rho_value,
+        target_theta_deg=red_theta_deg,
+        count=args.red_line_count,
+    )
+    for idx, entry in enumerate(red_debug_lines, start=1):
+        entry["label"] = f"RED window {idx}"
+        entry["short_label"] = f"R{idx}"
 
     blue_debug_lines: list[dict[str, object]] = []
     if args.show_top_accumulator_lines:
