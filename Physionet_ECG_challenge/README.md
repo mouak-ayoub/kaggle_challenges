@@ -39,6 +39,16 @@ Recent progress:
   - grouped config: `HoughBoundaryGridConfig`
   - shared pipeline: `run_hough_boundary_grid_detection`
   - reusable outputs for threshold-qualified bins, dominant/perpendicular families, and the selected extreme boundary lines
+- boundary-line selection is now configurable through shared YAML / `HoughBoundaryGridConfig`:
+  - `global_threshold_extrema`
+    - old method
+    - selects family extremes directly from threshold-qualified bins
+  - `theta_guided_rho_pair_score`
+    - new method
+    - uses the global threshold only to discover dominant and perpendicular theta families
+    - then chooses final boundary lines from local rho maxima scored by:
+      - pair accumulator strength
+      - pair separation in projected rho
 - the unitary Hough notebook now uses that same shared boundary-grid method for line selection:
   - it keeps the image-specific debug plots, but no longer duplicates the dominant/perpendicular family selection logic locally
 - a compact preview notebook was added to inspect the extracted method on 10 random sample pairs:

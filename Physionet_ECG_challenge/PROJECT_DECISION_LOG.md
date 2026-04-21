@@ -93,6 +93,42 @@ Use this boundary-grid selection method:
 - The unitary notebook keeps debug visualization, but the stable line-selection method should not be reimplemented there.
 - Batch evaluation should reuse this same method unchanged.
 
+## Decision: Theta-family discovery and rho-boundary selection should be separated
+
+Date: 2026-04
+Status: Active
+
+### Context
+
+The threshold-qualified family-extrema method improved line selection a lot, but a clear regression case remained:
+- the dominant/perpendicular theta families were correctly detected
+- a plausible border line still existed near the correct theta family
+- that border line was discarded only because its accumulator was just below the global threshold
+
+### Decision
+
+Keep the global threshold for theta-family discovery, but do not use that same threshold as the final gate for rho-boundary selection.
+
+The new shared selector:
+1. uses threshold-qualified bins to estimate dominant and perpendicular theta families
+2. builds a local-max rho candidate set inside each family
+3. scores candidate pairs using:
+   - pair accumulator strength
+   - pair separation in projected rho
+
+### Evidence
+
+- The failing right-border example had the correct perpendicular family but lost the real border line before extrema selection because:
+  - the line accumulator was slightly below the global threshold
+  - the angle family itself was already correct
+- Moving final rho selection to local-max candidate pairs recovered that case without changing theta-family discovery.
+
+### Consequence
+
+- `HoughBoundaryGridConfig` now exposes a configurable line-selection strategy.
+- The old `global_threshold_extrema` method remains available as a fallback / comparison baseline.
+- The shared YAML baseline now uses the new `theta_guided_rho_pair_score` selector.
+
 ## Decision: Debug logic stays notebook-local until it stabilizes
 
 Date: 2026-04

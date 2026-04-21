@@ -1,6 +1,7 @@
 """Config and result objects for reusable CV pipelines."""
 
 from .config import (
+    BoundaryLineSelectionStrategy,
     ClosedContourInitConfig,
     ClosedPageDetectionConfig,
     EnergyConfig,
@@ -23,6 +24,7 @@ from .results import (
     EnergyBuildResult,
     HoughBoundaryGridDetectionResult,
     HoughLineFamily,
+    HoughLinePairScore,
     HoughThresholdEntry,
     PageScoreResult,
     ProbabilisticHoughResult,
@@ -34,6 +36,7 @@ __all__ = [
     "ClosedContourInitConfig",
     "ClosedPageDetectionConfig",
     "CoordinateMappingResult",
+    "BoundaryLineSelectionStrategy",
     "EnergyBuildResult",
     "EnergyConfig",
     "EnhancementConfig",
@@ -41,6 +44,7 @@ __all__ = [
     "HoughBoundaryGridConfig",
     "HoughBoundaryGridDetectionResult",
     "HoughLineFamily",
+    "HoughLinePairScore",
     "load_hough_boundary_notebook_defaults",
     "make_hough_boundary_notebook_defaults",
     "HoughThresholdEntry",

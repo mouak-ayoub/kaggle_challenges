@@ -86,7 +86,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--red-angle-tolerance-deg", type=float, default=0.1)
     parser.add_argument("--red-rho-delta", type=float, default=15.0)
     parser.add_argument("--red-center-rho", type=float, default=None)
-    parser.add_argument("--left-search-width-frac", type=float, default=0.12)
+    parser.add_argument("--auto-center-search-width-frac", type=float, default=0.12)
     parser.add_argument("--top-accumulator-line-count", type=int, default=5)
     parser.add_argument("--show-top-accumulator-lines", action="store_true")
     return parser.parse_args()
@@ -514,12 +514,12 @@ def main() -> None:
 
     red_theta, red_theta_deg = red_theta_from_cfg(standard_hough_result, vertical_green_entries, args.red_target_theta_deg)
     distance_step = float(np.median(np.diff(standard_hough_result.distances))) if len(standard_hough_result.distances) > 1 else 1.0
-    left_search_width = max(1, int(float(args.left_search_width_frac) * edges.shape[1]))
+    auto_center_search_width = max(1, int(float(args.auto_center_search_width_frac) * edges.shape[1]))
 
     if args.red_center_rho is None:
-        y_edge, x_edge = np.nonzero(edges[:, :left_search_width])
+        y_edge, x_edge = np.nonzero(edges[:, :auto_center_search_width])
         if x_edge.size == 0:
-            raise ValueError("No edge pixel found in the left search window.")
+            raise ValueError("No edge pixel found in the auto-center search window.")
         rho_votes = x_edge.astype(float) * np.cos(red_theta) + y_edge.astype(float) * np.sin(red_theta)
         left_vote_indices = np.rint((rho_votes - standard_hough_result.distances[0]) / distance_step).astype(int)
         left_vote_indices = np.clip(left_vote_indices, 0, standard_hough_result.distances.size - 1)

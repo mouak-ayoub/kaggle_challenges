@@ -60,6 +60,21 @@ class HoughThresholdEntry:
     theta_deg: float
     value: float
     segment: tuple[tuple[float, float], tuple[float, float]]
+    projected_rho: float | None = None
+    accum_norm: float | None = None
+    above_global_threshold: bool | None = None
+
+
+@dataclass
+class HoughLinePairScore:
+    """Score of one ordered pair of candidate lines inside one theta family."""
+
+    line_low: HoughThresholdEntry
+    line_high: HoughThresholdEntry
+    accum_pair: float
+    separation: float
+    sep_norm: float
+    score: float
 
 
 @dataclass
@@ -70,7 +85,11 @@ class HoughLineFamily:
     center_theta_deg: float
     tolerance_deg: float
     reference_theta_deg: float
+    strategy: str = "global_threshold_extrema"
     entries: list[HoughThresholdEntry] = field(default_factory=list)
+    candidate_lines: list[HoughThresholdEntry] = field(default_factory=list)
+    scored_pairs: list[HoughLinePairScore] = field(default_factory=list)
+    projected_span: float | None = None
     min_entry: HoughThresholdEntry | None = None
     max_entry: HoughThresholdEntry | None = None
 
@@ -88,6 +107,25 @@ class HoughBoundaryGridDetectionResult:
     threshold_entries: list[HoughThresholdEntry] = field(default_factory=list)
     dominant_family: HoughLineFamily | None = None
     perpendicular_family: HoughLineFamily | None = None
+
+
+@dataclass
+class HoughRhoRefinementResult:
+    """1D rho-profile refinement inside one theta family."""
+
+    family_name: str
+    center_theta_deg: float
+    tolerance_deg: float
+    reduction: str
+    source_name: str
+    theta_indices: np.ndarray
+    theta_values_deg: np.ndarray
+    rho_values: np.ndarray
+    profile_values: np.ndarray
+    peak_rho_indices: np.ndarray
+    peak_rhos: np.ndarray
+    peak_values: np.ndarray
+    peak_prominences: np.ndarray
 
 
 @dataclass

@@ -92,6 +92,16 @@ This includes hard cases:
 - The current active-contour work uses the circular page contour notebook as the main experiment
 - The boundary-detection notebook now reuses methods from `src` instead of keeping duplicate helper code inside the notebook
 - The Optuna notebook is being refactored so the study boilerplate and page-scoring helpers can be reused in later scenarios
+- Temporary Hough regression case to keep until the boundary-line selector is redesigned:
+  - in the unitary Hough notebook, a right-border candidate exists in the debug window at:
+    - `rho=965`, `theta_deg=1.0`, `accumulator=183.0`, `is_peak=False`
+  - current selected boundary lines on that sample are:
+    - `D_min=-723`, `D_max=-31`, `P_min=68`, `P_max=518`
+  - effective threshold is:
+    - `184.8`
+  - interpretation:
+    - angle-family detection is correct
+    - the border line is lost by the global threshold gate before final extrema selection
 
 ## Latest Milestone
 
@@ -181,6 +191,28 @@ This includes hard cases:
     - `rho_resolution_pixels`
     - `opencv_use_edge_values`
   - the OpenCV branch currently exposes a sparse accumulator of local maxima plus votes, so the existing boundary-grid pipeline can still run without notebook-side method duplication
+- The Hough boundary selector is now strategy-driven through shared YAML config:
+  - `BOUNDARY_LINE_SELECTION_STRATEGY = global_threshold_extrema`
+    - old method
+    - uses only threshold-qualified bins and projected-rho extremes
+  - `BOUNDARY_LINE_SELECTION_STRATEGY = theta_guided_rho_pair_score`
+    - new method
+    - keeps the global threshold only for theta-family discovery
+    - then discards it for final rho selection
+    - final boundary lines come from local rho maxima inside each theta family, scored by:
+      - pair accumulator strength
+      - pair separation in projected rho
+- The shared baseline YAML profile now uses:
+  - `theta_guided_rho_pair_score`
+  - pair score weights:
+    - accumulator `0.55`
+    - separation `0.45`
+  - candidate pruning:
+    - top `12` local maxima per family
+    - minimum rho spacing `20` bins
+- The unitary Hough notebook now contains two stable diagnostic cells for the new selector:
+  - a symmetric pair-score matrix plot per family
+  - a best-pair display cell backed by the shared `src` result instead of notebook-local recomputation
 - Project documentation is now split by purpose:
   - `AGENTS.md` for workflow rules
   - `LOCAL_PROJECT_MEMORY.md` for current state

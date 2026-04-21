@@ -32,6 +32,11 @@ profiles:
     boundary:
       primary_theta_tolerance_deg: 5.0
       perpendicular_theta_tolerance_deg: 3.0
+      line_selection_strategy: score
+      pair_max_candidates_per_family: 50
+      pair_min_rho_spacing_bins: 15
+      pair_accumulator_weight: 0.55
+      pair_separation_weight: 0.45
 
   opencv_weighted_experimental:
     rescaling:
@@ -66,3 +71,8 @@ profiles:
     boundary:
       primary_theta_tolerance_deg: 5.0
       perpendicular_theta_tolerance_deg: 3.0
+      line_selection_strategy: score
+      pair_max_candidates_per_family: 20
+      pair_min_rho_spacing_bins: 20
+      pair_accumulator_weight: 0.55
+      pair_separation_weight: 0.45
