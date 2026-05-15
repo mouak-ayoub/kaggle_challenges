@@ -49,10 +49,18 @@ Recent progress:
     - then chooses final boundary lines from local rho maxima scored by:
       - pair accumulator strength
       - pair separation in projected rho
+  - `hybrid_global_score_separation`
+    - new hybrid method
+    - builds both `global` and `score`
+    - then chooses the dominant pair and perpendicular pair independently using only normalized pair separation
 - the unitary Hough notebook now uses that same shared boundary-grid method for line selection:
   - it keeps the image-specific debug plots, but no longer duplicates the dominant/perpendicular family selection logic locally
 - a compact preview notebook was added to inspect the extracted method on 10 random sample pairs:
   - `notebooks/boundary_detection/ecg_hough_boundary_grid_preview.ipynb`
+  - it now compares:
+    - `global`
+    - `score`
+    - `hybrid`
 - the two Hough notebooks are now aligned on the same Hough boundary-grid parameters by default
 - those shared Hough notebook defaults now live in:
   - `config/hough_notebooks.yaml`
@@ -65,6 +73,9 @@ Recent progress:
   - Plotly interactive 3D can open in the browser or be saved to HTML
   - Matplotlib external-window mode is still available as a fallback
 - the reusable `src` Hough path now supports optional accumulator smoothing through `StandardHoughConfig`
+- the morphology-based ink-removal baseline from `notebooks/ink_removal/ecg_morphology_background_replacement.ipynb` is now extracted in `src.preprocessing.build_blackhat_inv`
+- the shared grayscale wrapper `src.preprocessing.apply_ink_removal` now exposes that method behind one config surface
+- the Hough notebooks now read a dedicated shared YAML `ink_removal` section and can apply that preprocessing step on the original grayscale image before resize, Canny, and Hough boundary detection
 
 This milestone is for analysis and debugging of page-edge candidates before we decide whether to relax Hough peak suppression, refine edge preprocessing, or move more of the notebook logic into reusable `src` code.
 

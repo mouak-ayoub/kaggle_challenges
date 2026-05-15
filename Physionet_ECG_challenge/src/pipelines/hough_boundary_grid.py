@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import numpy as np
 
 from ..core.config import HoughBoundaryGridConfig
@@ -18,6 +20,8 @@ _LINE_SELECTION_STRATEGY_ALIASES: dict[str, str] = {
     "global_threshold_extrema": "global_threshold_extrema",
     "score": "theta_guided_rho_pair_score",
     "theta_guided_rho_pair_score": "theta_guided_rho_pair_score",
+    "hybrid": "hybrid_global_score_separation",
+    "hybrid_global_score_separation": "hybrid_global_score_separation",
 }
 
 
@@ -121,6 +125,16 @@ def _projected_rho(entry: HoughThresholdEntry, reference_theta_deg: float) -> fl
 
 
 def _image_projected_span(image_shape: tuple[int, int], reference_theta_deg: float) -> float:
+    projected_min, projected_max = _image_projected_bounds(
+        image_shape, reference_theta_deg
+    )
+    span = projected_max - projected_min
+    return float(span if span > 0.0 else 1.0)
+
+
+def _image_projected_bounds(
+    image_shape: tuple[int, int], reference_theta_deg: float
+) -> tuple[float, float]:
     height, width = image_shape
     reference_theta_rad = float(np.deg2rad(reference_theta_deg))
     corner_values = [
@@ -132,8 +146,7 @@ def _image_projected_span(image_shape: tuple[int, int], reference_theta_deg: flo
             (float(width - 1), float(height - 1)),
         )
     ]
-    span = max(corner_values) - min(corner_values)
-    return float(span if span > 0.0 else 1.0)
+    return float(min(corner_values)), float(max(corner_values))
 
 
 def _local_maxima_indices(values: np.ndarray) -> np.ndarray:
@@ -199,6 +212,7 @@ def _build_line_family_theta_guided_rho_pair_score(
     center_theta_deg: float,
     tolerance_deg: float,
     entries: list[HoughThresholdEntry],
+    forced_entries: list[HoughThresholdEntry] | None,
     threshold_reference: np.ndarray,
     hough_result,
     image_shape: tuple[int, int],
@@ -207,6 +221,7 @@ def _build_line_family_theta_guided_rho_pair_score(
     min_rho_spacing_bins: int,
     pair_accumulator_weight: float,
     pair_separation_weight: float,
+    pair_outerness_weight: float,
 ) -> HoughLineFamily:
     reference_theta_deg = _reference_theta_deg(entries)
     if reference_theta_deg is None:
@@ -287,6 +302,29 @@ def _build_line_family_theta_guided_rho_pair_score(
         if len(candidate_lines) >= max_candidates_per_family:
             break
 
+    existing_candidate_keys = {
+        (candidate.rho_idx, candidate.theta_idx) for candidate in candidate_lines
+    }
+    for forced_entry in forced_entries or []:
+        candidate_key = (forced_entry.rho_idx, forced_entry.theta_idx)
+        if candidate_key in existing_candidate_keys:
+            continue
+        candidate_lines.append(
+            HoughThresholdEntry(
+                entry_index=len(candidate_lines) + 1,
+                rho_idx=int(forced_entry.rho_idx),
+                theta_idx=int(forced_entry.theta_idx),
+                rho=float(forced_entry.rho),
+                theta=float(forced_entry.theta),
+                theta_deg=float(forced_entry.theta_deg),
+                value=float(forced_entry.value),
+                segment=forced_entry.segment,
+                projected_rho=_projected_rho(forced_entry, reference_theta_deg),
+                above_global_threshold=True,
+            )
+        )
+        existing_candidate_keys.add(candidate_key)
+
     if not candidate_lines:
         return HoughLineFamily(
             name=name,
@@ -300,7 +338,10 @@ def _build_line_family_theta_guided_rho_pair_score(
         )
 
     max_candidate_value = max(candidate.value for candidate in candidate_lines)
-    projected_span = _image_projected_span(image_shape, reference_theta_deg)
+    projected_min, projected_max = _image_projected_bounds(
+        image_shape, reference_theta_deg
+    )
+    projected_span = float(projected_max - projected_min if projected_max > projected_min else 1.0)
     for candidate in candidate_lines:
         candidate.accum_norm = (
             float(candidate.value / max_candidate_value)
@@ -324,9 +365,31 @@ def _build_line_family_theta_guided_rho_pair_score(
                 abs((line_a.projected_rho or 0.0) - (line_b.projected_rho or 0.0))
             )
             sep_norm = float(np.clip(separation / projected_span, 0.0, 1.0))
-            score = float(
+            outer_low = float(
+                np.clip(
+                    1.0
+                    - abs((line_low.projected_rho or 0.0) - projected_min)
+                    / projected_span,
+                    0.0,
+                    1.0,
+                )
+            )
+            outer_high = float(
+                np.clip(
+                    1.0
+                    - abs((line_high.projected_rho or 0.0) - projected_max)
+                    / projected_span,
+                    0.0,
+                    1.0,
+                )
+            )
+            outerness = float(0.5 * (outer_low + outer_high))
+            local_score = float(
                 pair_accumulator_weight * accum_pair
                 + pair_separation_weight * sep_norm
+            )
+            score = float(
+                local_score + pair_outerness_weight * outerness
             )
             scored_pairs.append(
                 HoughLinePairScore(
@@ -335,12 +398,14 @@ def _build_line_family_theta_guided_rho_pair_score(
                     accum_pair=accum_pair,
                     separation=separation,
                     sep_norm=sep_norm,
+                    local_score=local_score,
+                    outerness=outerness,
                     score=score,
                 )
             )
 
     scored_pairs.sort(
-        key=lambda pair: (pair.score, pair.sep_norm, pair.accum_pair),
+        key=lambda pair: (pair.score, pair.outerness, pair.sep_norm, pair.accum_pair),
         reverse=True,
     )
 
@@ -364,8 +429,70 @@ def _build_line_family_theta_guided_rho_pair_score(
         candidate_lines=candidate_lines,
         scored_pairs=scored_pairs,
         projected_span=projected_span,
+        selected_source="score",
         min_entry=min_entry,
         max_entry=max_entry,
+    )
+
+
+def _family_separation_norm(
+    family: HoughLineFamily | None,
+    image_shape: tuple[int, int],
+) -> float:
+    if family is None or family.min_entry is None or family.max_entry is None:
+        return -1.0
+    reference_theta_deg = float(family.reference_theta_deg)
+    projected_low = _projected_rho(family.min_entry, reference_theta_deg)
+    projected_high = _projected_rho(family.max_entry, reference_theta_deg)
+    projected_span = _image_projected_span(image_shape, reference_theta_deg)
+    return float(np.clip(abs(projected_high - projected_low) / projected_span, 0.0, 1.0))
+
+
+def _perpendicular_center_theta_deg(
+    *,
+    dominant_theta_deg: float,
+    dominant_family: HoughLineFamily | None,
+    anchor_mode: str,
+) -> float:
+    if (
+        str(anchor_mode).strip().lower() == "dominant_family_reference_theta"
+        and dominant_family is not None
+    ):
+        anchor_theta_deg = float(dominant_family.reference_theta_deg)
+    else:
+        anchor_theta_deg = float(dominant_theta_deg)
+    return _wrap_line_theta_deg(anchor_theta_deg + 90.0)
+
+
+def _build_line_family_hybrid_global_score_separation(
+    *,
+    global_family: HoughLineFamily | None,
+    score_family: HoughLineFamily | None,
+    image_shape: tuple[int, int],
+) -> HoughLineFamily | None:
+    if global_family is None and score_family is None:
+        return None
+    if global_family is None:
+        return replace(
+            score_family,
+            strategy="hybrid_global_score_separation",
+            selected_source="score",
+        )
+    if score_family is None:
+        return replace(
+            global_family,
+            strategy="hybrid_global_score_separation",
+            selected_source="global",
+        )
+
+    global_sep_norm = _family_separation_norm(global_family, image_shape)
+    score_sep_norm = _family_separation_norm(score_family, image_shape)
+    chosen_family = global_family if global_sep_norm >= score_sep_norm else score_family
+    chosen_source = "global" if chosen_family is global_family else "score"
+    return replace(
+        chosen_family,
+        strategy="hybrid_global_score_separation",
+        selected_source=chosen_source,
     )
 
 
@@ -423,23 +550,31 @@ def run_hough_boundary_grid_detection(
     if dominant_theta_deg is None:
         return result
 
-    perpendicular_theta_deg = _wrap_line_theta_deg(dominant_theta_deg + 90.0)
     dominant_entries = _select_family_entries(
         threshold_entries,
         dominant_theta_deg,
         cfg.primary_theta_tolerance_deg,
     )
-    perpendicular_entries = _select_family_entries(
-        threshold_entries,
-        perpendicular_theta_deg,
-        cfg.perpendicular_theta_tolerance_deg,
-    )
     if line_selection_strategy == "theta_guided_rho_pair_score":
+        dominant_global_family = _build_line_family_global_threshold_extrema(
+            name="dominant",
+            center_theta_deg=dominant_theta_deg,
+            tolerance_deg=cfg.primary_theta_tolerance_deg,
+            entries=dominant_entries,
+        )
         result.dominant_family = _build_line_family_theta_guided_rho_pair_score(
             name="dominant",
             center_theta_deg=dominant_theta_deg,
             tolerance_deg=cfg.primary_theta_tolerance_deg,
             entries=dominant_entries,
+            forced_entries=[
+                entry
+                for entry in (
+                    dominant_global_family.min_entry,
+                    dominant_global_family.max_entry,
+                )
+                if entry is not None
+            ],
             threshold_reference=threshold_reference,
             hough_result=hough_result,
             image_shape=resized_gray.shape,
@@ -448,12 +583,37 @@ def run_hough_boundary_grid_detection(
             min_rho_spacing_bins=cfg.pair_min_rho_spacing_bins,
             pair_accumulator_weight=cfg.pair_accumulator_weight,
             pair_separation_weight=cfg.pair_separation_weight,
+            pair_outerness_weight=cfg.pair_outerness_weight,
+        )
+        perpendicular_theta_deg = _perpendicular_center_theta_deg(
+            dominant_theta_deg=dominant_theta_deg,
+            dominant_family=result.dominant_family,
+            anchor_mode=cfg.perpendicular_anchor_mode,
+        )
+        perpendicular_entries = _select_family_entries(
+            threshold_entries,
+            perpendicular_theta_deg,
+            cfg.perpendicular_theta_tolerance_deg,
+        )
+        perpendicular_global_family = _build_line_family_global_threshold_extrema(
+            name="perpendicular",
+            center_theta_deg=perpendicular_theta_deg,
+            tolerance_deg=cfg.perpendicular_theta_tolerance_deg,
+            entries=perpendicular_entries,
         )
         result.perpendicular_family = _build_line_family_theta_guided_rho_pair_score(
             name="perpendicular",
             center_theta_deg=perpendicular_theta_deg,
             tolerance_deg=cfg.perpendicular_theta_tolerance_deg,
             entries=perpendicular_entries,
+            forced_entries=[
+                entry
+                for entry in (
+                    perpendicular_global_family.min_entry,
+                    perpendicular_global_family.max_entry,
+                )
+                if entry is not None
+            ],
             threshold_reference=threshold_reference,
             hough_result=hough_result,
             image_shape=resized_gray.shape,
@@ -462,6 +622,86 @@ def run_hough_boundary_grid_detection(
             min_rho_spacing_bins=cfg.pair_min_rho_spacing_bins,
             pair_accumulator_weight=cfg.pair_accumulator_weight,
             pair_separation_weight=cfg.pair_separation_weight,
+            pair_outerness_weight=cfg.pair_outerness_weight,
+        )
+    elif line_selection_strategy == "hybrid_global_score_separation":
+        dominant_global_family = _build_line_family_global_threshold_extrema(
+            name="dominant",
+            center_theta_deg=dominant_theta_deg,
+            tolerance_deg=cfg.primary_theta_tolerance_deg,
+            entries=dominant_entries,
+        )
+        dominant_score_family = _build_line_family_theta_guided_rho_pair_score(
+            name="dominant",
+            center_theta_deg=dominant_theta_deg,
+            tolerance_deg=cfg.primary_theta_tolerance_deg,
+            entries=dominant_entries,
+            forced_entries=[
+                entry
+                for entry in (
+                    dominant_global_family.min_entry,
+                    dominant_global_family.max_entry,
+                )
+                if entry is not None
+            ],
+            threshold_reference=threshold_reference,
+            hough_result=hough_result,
+            image_shape=resized_gray.shape,
+            effective_threshold_value=effective_threshold_value,
+            max_candidates_per_family=cfg.pair_max_candidates_per_family,
+            min_rho_spacing_bins=cfg.pair_min_rho_spacing_bins,
+            pair_accumulator_weight=cfg.pair_accumulator_weight,
+            pair_separation_weight=cfg.pair_separation_weight,
+            pair_outerness_weight=cfg.pair_outerness_weight,
+        )
+        result.dominant_family = _build_line_family_hybrid_global_score_separation(
+            global_family=dominant_global_family,
+            score_family=dominant_score_family,
+            image_shape=resized_gray.shape,
+        )
+        perpendicular_theta_deg = _perpendicular_center_theta_deg(
+            dominant_theta_deg=dominant_theta_deg,
+            dominant_family=result.dominant_family,
+            anchor_mode=cfg.perpendicular_anchor_mode,
+        )
+        perpendicular_entries = _select_family_entries(
+            threshold_entries,
+            perpendicular_theta_deg,
+            cfg.perpendicular_theta_tolerance_deg,
+        )
+        perpendicular_global_family = _build_line_family_global_threshold_extrema(
+            name="perpendicular",
+            center_theta_deg=perpendicular_theta_deg,
+            tolerance_deg=cfg.perpendicular_theta_tolerance_deg,
+            entries=perpendicular_entries,
+        )
+        perpendicular_score_family = _build_line_family_theta_guided_rho_pair_score(
+            name="perpendicular",
+            center_theta_deg=perpendicular_theta_deg,
+            tolerance_deg=cfg.perpendicular_theta_tolerance_deg,
+            entries=perpendicular_entries,
+            forced_entries=[
+                entry
+                for entry in (
+                    perpendicular_global_family.min_entry,
+                    perpendicular_global_family.max_entry,
+                )
+                if entry is not None
+            ],
+            threshold_reference=threshold_reference,
+            hough_result=hough_result,
+            image_shape=resized_gray.shape,
+            effective_threshold_value=effective_threshold_value,
+            max_candidates_per_family=cfg.pair_max_candidates_per_family,
+            min_rho_spacing_bins=cfg.pair_min_rho_spacing_bins,
+            pair_accumulator_weight=cfg.pair_accumulator_weight,
+            pair_separation_weight=cfg.pair_separation_weight,
+            pair_outerness_weight=cfg.pair_outerness_weight,
+        )
+        result.perpendicular_family = _build_line_family_hybrid_global_score_separation(
+            global_family=perpendicular_global_family,
+            score_family=perpendicular_score_family,
+            image_shape=resized_gray.shape,
         )
     else:
         result.dominant_family = _build_line_family_global_threshold_extrema(
@@ -470,10 +710,24 @@ def run_hough_boundary_grid_detection(
             tolerance_deg=cfg.primary_theta_tolerance_deg,
             entries=dominant_entries,
         )
+        if result.dominant_family is not None:
+            result.dominant_family.selected_source = "global"
+        perpendicular_theta_deg = _perpendicular_center_theta_deg(
+            dominant_theta_deg=dominant_theta_deg,
+            dominant_family=result.dominant_family,
+            anchor_mode=cfg.perpendicular_anchor_mode,
+        )
+        perpendicular_entries = _select_family_entries(
+            threshold_entries,
+            perpendicular_theta_deg,
+            cfg.perpendicular_theta_tolerance_deg,
+        )
         result.perpendicular_family = _build_line_family_global_threshold_extrema(
             name="perpendicular",
             center_theta_deg=perpendicular_theta_deg,
             tolerance_deg=cfg.perpendicular_theta_tolerance_deg,
             entries=perpendicular_entries,
         )
+        if result.perpendicular_family is not None:
+            result.perpendicular_family.selected_source = "global"
     return result

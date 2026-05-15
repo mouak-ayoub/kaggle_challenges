@@ -9,8 +9,14 @@ StandardHoughBackend = Literal["skimage", "opencv"]
 BoundaryLineSelectionStrategy = Literal[
     "global_threshold_extrema",
     "theta_guided_rho_pair_score",
+    "hybrid_global_score_separation",
     "global",
     "score",
+    "hybrid",
+]
+PerpendicularAnchorMode = Literal[
+    "dominant_center",
+    "dominant_family_reference_theta",
 ]
 
 
@@ -145,8 +151,12 @@ class HoughBoundaryGridConfig:
     standard_hough: StandardHoughConfig = field(default_factory=StandardHoughConfig)
     primary_theta_tolerance_deg: float = 5.0
     perpendicular_theta_tolerance_deg: float = 3.0
+    perpendicular_anchor_mode: PerpendicularAnchorMode = (
+        "dominant_family_reference_theta"
+    )
     line_selection_strategy: BoundaryLineSelectionStrategy = "global_threshold_extrema"
     pair_max_candidates_per_family: int = 12
     pair_min_rho_spacing_bins: int = 20
-    pair_accumulator_weight: float = 0.55
-    pair_separation_weight: float = 0.45
+    pair_accumulator_weight: float = 0.40
+    pair_separation_weight: float = 0.30
+    pair_outerness_weight: float = 0.30

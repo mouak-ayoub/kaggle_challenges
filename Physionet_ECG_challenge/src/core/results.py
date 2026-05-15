@@ -74,6 +74,8 @@ class HoughLinePairScore:
     accum_pair: float
     separation: float
     sep_norm: float
+    local_score: float
+    outerness: float
     score: float
 
 
@@ -90,6 +92,7 @@ class HoughLineFamily:
     candidate_lines: list[HoughThresholdEntry] = field(default_factory=list)
     scored_pairs: list[HoughLinePairScore] = field(default_factory=list)
     projected_span: float | None = None
+    selected_source: str | None = None
     min_entry: HoughThresholdEntry | None = None
     max_entry: HoughThresholdEntry | None = None
 

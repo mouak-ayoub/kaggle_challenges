@@ -1,78 +1,46 @@
+# Shared Hough notebook profiles.
+# Add another profile under `profiles:` if you want to compare several baselines.
+
 profiles:
-  shared_baseline:
-    rescaling:
-      max_dim: 1000
+  shared_baseline:  # current shared default for the unitary and preview Hough notebooks
+    rescaling:  # resize before feature extraction
+      max_dim: 1000  # int pixels; typical values: 800, 1000, 1500
 
-    enhancement:
-      gaussian_sigma: 0.0
-      enhancement_mode: none
-      unsharp_radius: 2.0
-      unsharp_amount: 1.5
-      # Zeroes a border of this many pixels on the edge map before voting (Used for instance in active contour model)
-      # Set to 0 here because we want to detect the true page boundary, including the outer border.
-      outer_black_border: 0
+    enhancement:  # intensity preprocessing before edge extraction
+      gaussian_sigma: 0.0  # float; 0.0 disables this pre-smoothing stage
+      enhancement_mode: none  # none | unsharp
+      unsharp_radius: 2.0  # float; used only when enhancement_mode=unsharp
+      unsharp_amount: 1.5  # float; used only when enhancement_mode=unsharp
+      outer_black_border: 0  # int pixels zeroed near the border in the final energy image
 
-    energy:
-      canny_sigma: 2.0
-      canny_low_threshold: 0.10
-      canny_high_threshold: 0.25
+    ink_removal:  # optional grayscale cleanup before resize/Canny/Hough
+      enabled: false  # true | false
+      method: blackhat_inv  # none | blackhat_inv | blackhat_only
+      closing_kernel: 25  # morphology kernel size in pixels
+      blur_ksize: null  # null disables blur; odd int enables Gaussian blur
 
-    hough:
-      backend: skimage
-      # opencv only: passed as rho= to cv2.HoughLinesWithAccumulator.
-      rho_resolution_pixels: 1.0
-      theta_step_degrees: 1
-      peak_threshold_ratio: 0.40
-      # opencv only: when true, each edge pixel votes with its gradient magnitude instead of 1.
-      use_edge_values: false
-      smooth_accumulator: false
-      accum_sigma_rho: 0.0
-      accum_sigma_theta: 0.0
+    energy:  # edge-map parameters
+      canny_sigma: 2.0  # float; typical range: 1.0 to 3.0
+      canny_low_threshold: 0.1  # float in [0, 1]
+      canny_high_threshold: 0.25  # float in [0, 1]
 
-    boundary:
-      primary_theta_tolerance_deg: 5.0
-      perpendicular_theta_tolerance_deg: 3.0
-      line_selection_strategy: score
-      pair_max_candidates_per_family: 50
-      pair_min_rho_spacing_bins: 15
-      pair_accumulator_weight: 0.55
-      pair_separation_weight: 0.45
+    hough:  # standard Hough transform parameters
+      backend: skimage  # skimage | opencv
+      rho_resolution_pixels: 1.0  # float; mainly relevant for backend=opencv
+      theta_step_degrees: 1  # float degrees per theta bin
+      peak_threshold_ratio: 0.4  # float in [0, 1]; threshold = ratio * max(accumulator)
+      use_edge_values: false  # false | true; OpenCV weighted voting only
+      smooth_accumulator: false  # false | true
+      accum_sigma_rho: 0.0  # float; used only when smooth_accumulator=true
+      accum_sigma_theta: 0.0  # float; used only when smooth_accumulator=true
 
-  opencv_weighted_experimental:
-    rescaling:
-      max_dim: 1000
-
-    enhancement:
-      gaussian_sigma: 0.0
-      enhancement_mode: none
-      unsharp_radius: 2.0
-      unsharp_amount: 1.5
-      # See shared_baseline for explanation.
-      outer_black_border: 0
-
-    energy:
-      canny_sigma: 2.0
-      canny_low_threshold: 0.10
-      canny_high_threshold: 0.25
-
-    hough:
-      backend: opencv
-      # See shared_baseline for explanation (opencv only, ignored by skimage backend).
-      rho_resolution_pixels: 1.0
-      theta_step_degrees: 1
-      peak_threshold_ratio: 0.40
-      # true: each edge pixel votes with its gradient magnitude (weighted Hough).
-      # Stronger but sparser border edges can then compete with weaker but denser grid lines.
-      use_edge_values: true
-      smooth_accumulator: false
-      accum_sigma_rho: 0.0
-      accum_sigma_theta: 0.0
-
-    boundary:
-      primary_theta_tolerance_deg: 5.0
-      perpendicular_theta_tolerance_deg: 3.0
-      line_selection_strategy: score
-      pair_max_candidates_per_family: 20
-      pair_min_rho_spacing_bins: 20
-      pair_accumulator_weight: 0.55
-      pair_separation_weight: 0.45
+    boundary:  # line-family selection after Hough
+      primary_theta_tolerance_deg: 6.0  # degrees around the dominant family center
+      perpendicular_theta_tolerance_deg: 6.0  # degrees around the perpendicular-family center
+      perpendicular_anchor_mode: dominant_family_reference_theta  # dominant_center | dominant_family_reference_theta
+      line_selection_strategy: hybrid  # global | score | hybrid
+      pair_max_candidates_per_family: 50  # int local-max rho candidates kept per family
+      pair_min_rho_spacing_bins: 15  # int minimum rho-bin spacing between kept candidates
+      pair_accumulator_weight: 0.5  # float weight for pair accumulator term
+      pair_separation_weight: 0.4  # float weight for pair separation term
+      pair_outerness_weight: 0.1  # float weight for pair outerness term

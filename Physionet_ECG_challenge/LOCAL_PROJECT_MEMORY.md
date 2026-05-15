@@ -202,17 +202,68 @@ This includes hard cases:
     - final boundary lines come from local rho maxima inside each theta family, scored by:
       - pair accumulator strength
       - pair separation in projected rho
+- The Hough boundary selector now also supports a hybrid strategy:
+  - `BOUNDARY_LINE_SELECTION_STRATEGY = hybrid`
+  - canonical name:
+    - `hybrid_global_score_separation`
+  - behavior:
+    - build both `global` and `score`
+    - choose the dominant-family pair and perpendicular-family pair independently
+    - family choice uses only normalized pair separation
+  - current verified examples:
+    - `10140238 / 0012`
+      - dominant source = `global`
+      - perpendicular source = `global`
+      - hybrid keeps `P_max = 994`
+    - `19030958 / 0009`
+      - dominant source = `global`
+      - perpendicular source = `score`
+      - hybrid keeps `P_max = 965`
 - The shared baseline YAML profile now uses:
-  - `theta_guided_rho_pair_score`
+  - `hybrid`
   - pair score weights:
-    - accumulator `0.55`
-    - separation `0.45`
+    - accumulator `0.50`
+    - separation `0.40`
+    - outerness `0.10`
   - candidate pruning:
-    - top `12` local maxima per family
-    - minimum rho spacing `20` bins
+    - top `50` local maxima per family
+    - minimum rho spacing `15` bins
 - The unitary Hough notebook now contains two stable diagnostic cells for the new selector:
   - a symmetric pair-score matrix plot per family
   - a best-pair display cell backed by the shared `src` result instead of notebook-local recomputation
+- The unitary Hough notebook now also includes a dedicated hybrid-selector section before the debug tools:
+  - it prints the hybrid selected lines
+  - it shows which family came from `global` vs `score`
+  - it plots the final hybrid boundary lines
+- The preview notebook now applies the fixed-seed random-set comparison to three methods:
+  - `global`
+  - `score`
+  - `hybrid`
+- The earlier ink-removal `blackhat_only` baseline has now been extracted into reusable `src` code:
+  - `src.preprocessing.build_blackhat_only`
+  - `src.preprocessing.odd_kernel_size`
+- The original ink-removal study notebook now calls that shared `src` function instead of keeping a duplicate local implementation:
+  - `notebooks/ink_removal/ecg_blackhat_derivative_decomposition.ipynb`
+- The morphology-based ink-removal method from `notebooks/ink_removal/ecg_morphology_background_replacement.ipynb` is now extracted into reusable `src` code:
+  - `src.preprocessing.build_blackhat_inv`
+- A shared grayscale pre-Hough wrapper now lives in `src` too:
+  - `src.preprocessing.apply_ink_removal`
+- The morphology study notebook now imports the shared `src` helpers instead of keeping a duplicate synthetic-ink generator:
+  - `notebooks/ink_removal/ecg_morphology_background_replacement.ipynb`
+- The Hough notebooks now use one shared YAML-backed `ink_removal` section:
+  - `enabled`
+  - `method`
+  - `closing_kernel`
+  - `blur_ksize`
+- Both Hough notebooks now apply the shared pre-Hough ink-removal stage on the original grayscale image before resize, Canny, and Hough:
+  - `notebooks/boundary_detection/ecg_hough_lines_page_detection.ipynb`
+  - `notebooks/boundary_detection/ecg_hough_boundary_grid_preview.ipynb`
+- The perpendicular-family anchor is now configurable in the shared Hough boundary config:
+  - `boundary.perpendicular_anchor_mode`
+  - current shared baseline:
+    - `dominant_family_reference_theta`
+  - rollback path:
+    - `dominant_center`
 - Project documentation is now split by purpose:
   - `AGENTS.md` for workflow rules
   - `LOCAL_PROJECT_MEMORY.md` for current state

@@ -11,6 +11,7 @@ The package is organized by semantic stage:
   - image loading and sample lookup
 - `preprocessing`
   - resize, normalize, border masking, intensity transforms
+  - reusable ink-suppression helpers such as `build_blackhat_only`
 - `features`
   - energy maps and feature images
 - `contours`

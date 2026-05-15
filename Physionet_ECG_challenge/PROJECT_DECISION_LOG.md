@@ -129,6 +129,45 @@ The new shared selector:
 - The old `global_threshold_extrema` method remains available as a fallback / comparison baseline.
 - The shared YAML baseline now uses the new `theta_guided_rho_pair_score` selector.
 
+## Decision: Keep both boundary selectors and add a hybrid family chooser
+
+Date: 2026-04
+Status: Active
+
+### Context
+
+The score-based selector fixed some global-threshold failures, but it also introduced new regressions on other images.
+
+Two confirmed counterexamples:
+- `19030958 / 0009`
+  - `score` improves the perpendicular family by recovering the far-right side
+- `10140238 / 0012`
+  - `global` remains better for the perpendicular family than `score`
+
+### Decision
+
+Keep both selectors and add a third one:
+- `hybrid_global_score_separation`
+
+For each family independently:
+1. build the `global` pair
+2. build the `score` pair
+3. choose the family pair using only normalized separation
+
+### Evidence
+
+- On `10140238 / 0012`, the hybrid selector keeps the `global` perpendicular pair and preserves `P_max = 994`
+- On `19030958 / 0009`, the hybrid selector keeps the `score` perpendicular pair and preserves `P_max = 965`
+
+### Consequence
+
+- We no longer force one selector to be globally best on every image.
+- The fixed-seed preview notebook can now compare:
+  - `global`
+  - `score`
+  - `hybrid`
+- Future debugging can focus on whether the hybrid chooser itself is sufficient, or whether we need a later rectangle-level chooser.
+
 ## Decision: Debug logic stays notebook-local until it stabilizes
 
 Date: 2026-04

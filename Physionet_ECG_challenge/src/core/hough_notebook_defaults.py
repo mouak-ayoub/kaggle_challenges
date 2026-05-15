@@ -8,6 +8,7 @@ import yaml
 # Sections not listed here get no prefix (rescaling, enhancement, energy).
 _SECTION_PREFIX: dict[str, str] = {
     "hough": "hough_",
+    "ink_removal": "ink_removal_",
     "boundary": "boundary_",
 }
 
