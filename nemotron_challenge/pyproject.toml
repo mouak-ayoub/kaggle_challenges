@@ -1,0 +1,47 @@
+[project]
+name = "nemotron-challenge"
+version = "0.1.0"
+description = "Utilities and experiments for the NVIDIA Nemotron Model Reasoning Challenge."
+requires-python = ">=3.10"
+dependencies = [
+    "ipykernel",
+    "jupyter",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+lora = [
+    "accelerate",
+    "datasets",
+    "peft",
+    "tensorboard",
+    "torch",
+    "transformers",
+    "trl",
+]
+colab-lora = [
+    "accelerate",
+    "bitsandbytes",
+    "datasets",
+    "peft",
+    "tensorboard",
+    "torch",
+    "transformers",
+    "trl",
+]
+ollama = [
+    "ollama",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

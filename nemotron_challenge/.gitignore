@@ -1,0 +1,25 @@
+# Local data and generated artifacts
+data/raw/
+data/interim/
+data/processed/
+outputs/
+models/
+wandb/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Kaggle credentials should stay outside the repo
+kaggle.json
+/build/
+/data/
