@@ -218,7 +218,7 @@ The training targets are short final answers, but the system prompt was too weak
 
 Lesson:
 
-For local sanity checks, use a strict final-answer-only prompt and keep `MAX_NEW_TOKENS` small. For real Kaggle scoring, deliberately train and prompt for `\boxed{...}` because the metric prioritizes boxed answers.
+For local sanity checks, use a strict final-answer-only prompt and keep `MAX_NEW_TOKENS` small. The metric prioritizes `\boxed{...}`, but the best observed submission so far was trained on raw short-answer targets. Treat boxed-target training as a separate experiment until it beats the raw-answer baseline.
 
 ## Kaggle vLLM Scoring Is Not Deterministic
 
@@ -246,7 +246,7 @@ The original extractor stopped at the first `}` inside `\boxed{...}`. The update
 
 Lesson:
 
-Train the model to output exactly one final `\boxed{...}` answer and no trailing text. Keep raw completions so extraction failures can be separated from reasoning failures.
+If testing boxed-output training or prompting, train the model to output exactly one final `\boxed{...}` answer and no trailing text. Keep raw completions so extraction failures can be separated from reasoning failures.
 
 ## Kaggle External Training Submission
 

@@ -121,23 +121,23 @@ Do not spend work on a final `submission.csv` path for leaderboard submission. V
 
 Active.
 
-## Decision: Train Toward The Official Boxed Answer Format
+## Decision: Keep Raw-Answer Targets As The Current Baseline
 
 ### Context
 
-The official metric prompt asks the model to put the final answer inside `\boxed{}` and the extractor prioritizes boxed content.
+The official metric prompt asks the model to put the final answer inside `\boxed{}` and the extractor prioritizes boxed content. However, the accepted Colab Nemotron run that scored about 0.62 was trained with raw short-answer targets, before the notebook was changed to boxed SFT targets.
 
 ### Decision
 
-Notebook SFT examples should train assistant targets as `\boxed{answer}` rather than raw short answers. Local sanity extraction should mirror the official boxed extraction behavior, including answers that contain literal braces.
+Keep `TRAIN_TARGET_FORMAT = "raw"` as the active notebook default because it reproduces the best known submission. Keep `TRAIN_TARGET_FORMAT = "boxed"` available as an explicit experiment, and keep local sanity extraction boxed-aware so extraction failures can be analyzed separately.
 
 ### Evidence
 
-The official metric notebook and Kaggle discussion threads confirm boxed answers are the primary extraction path. The metric was updated after community reports that answers containing `}` were impossible or ambiguous under the old regex. Threads also report score drops when generated reasoning is truncated before the boxed answer.
+The official metric notebook and Kaggle discussion threads confirm boxed answers are the primary extraction path. The metric was updated after community reports that answers containing `}` were impossible or ambiguous under the old regex. But the only observed higher score so far is the raw-answer Colab run at about 0.62; the boxed-target change has not yet been scored as an improvement.
 
 ### Consequence
 
-Prompts should ask for a boxed answer with no trailing text. Generation checks should inspect raw outputs and boxed extraction separately from reasoning correctness.
+Do not overwrite the known baseline with an unscored format change. When testing boxed targets, record it as a separate submission with its own metadata and compare against the raw-answer baseline.
 
 ### Status
 
@@ -160,6 +160,50 @@ Kaggle discussion confirms vLLM scoring is not deterministic even with `temperat
 ### Consequence
 
 Small leaderboard deltas should be treated cautiously. Track category-level local behavior and avoid overfitting to one public score.
+
+### Status
+
+Active.
+
+## Decision: Scale The Known Raw Baseline Before CoT Variants
+
+### Context
+
+The next target is a public score near 0.7. Proposed changes include CoT-style prompting, training on more data, proportional logging/eval, and watching probe answers before and after training.
+
+### Decision
+
+Make the next default run a scaled version of the known 0.62 baseline: raw-answer targets, the same direct prompt, all available training rows except the eval split, and better instrumentation. Keep boxed and private-reasoning prompts available as explicit switches, not the default.
+
+### Evidence
+
+The only high-scoring observed submission so far is the raw-target Nemotron LoRA run at about 0.62. Kaggle discussions warn that longer reasoning traces can lower score if the model fails to finish with a clean final answer. More data and better logs are lower-risk changes than changing both reasoning style and target format at the same time.
+
+### Consequence
+
+Compare the full-row raw run against 0.62 first. If it does not improve enough, submit a separate prompt/target experiment and track it independently in `outputs/submissions/`.
+
+### Status
+
+Active.
+
+## Decision: Persist Colab Training Outputs To Google Drive
+
+### Context
+
+Long Nemotron LoRA runs in Colab can be interrupted or reclaimed automatically, especially when multiple heavy GPU sessions run in parallel. Runtime-local files under `/content` disappear when the VM is deleted.
+
+### Decision
+
+Write experiment outputs, checkpoints, submission zips, diagnostics, trainer logs, and probe evolution files to Google Drive by default. Keep raw competition data local for speed, but persist training outputs under `/content/drive/MyDrive/nemotron_challenge/outputs/{EXPERIMENT_NAME}`.
+
+### Evidence
+
+The `03` and `04` Colab sessions disconnected automatically and their runtime-local artifacts were lost. Resume is only possible if a full `checkpoint-*` directory, including trainer state, survives outside the VM.
+
+### Consequence
+
+The Colab notebook now mounts Drive, uses Drive-backed `OUTPUT_DIR`, and auto-resumes from the latest checkpoint unless explicitly disabled. Starting a clean rerun with the same `EXPERIMENT_NAME` requires changing the experiment name or manually clearing the old Drive output directory.
 
 ### Status
 
