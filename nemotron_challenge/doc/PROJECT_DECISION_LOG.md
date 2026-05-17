@@ -276,3 +276,25 @@ Boxed formatting helps extraction discipline but is not enough to improve reason
 ### Status
 
 Active.
+
+## Decision: Use Brainstorm-Then-Notebook Experiment Loop
+
+### Context
+
+The project has already spent several notebook iterations on raw final-answer SFT and boxed/private-reasoning variants. The best observed public score is still about `0.62`, while full-data raw and final-answer boxed experiments regressed to about `0.54` and `0.53`.
+
+### Decision
+
+Use a deliberate loop for future work: brainstorm candidate ideas together, critique them as research hypotheses, choose one simple non-trivial idea, implement it notebook-first, run it in Colab, download the run bundle/diagnostics, build the Kaggle `submission.zip` locally, update the dashboard and experiment notes, then iterate toward at least `0.7`.
+
+### Evidence
+
+Recent runs show that changing several knobs without enough procedural signal can improve formatting or eval loss while hurting the public score. The current strongest directions are short procedural traces and STaR-like bootstrapped SFT, but each needs visible artifacts and category-level evidence before becoming the next submitted adapter.
+
+### Consequence
+
+Do not jump straight into broad refactors or factorial sweeps. For each iteration, keep the selected idea legible in the notebook top cell, preserve raw completions and generated-eval outputs, and archive the resulting bundle/submission before choosing the next idea.
+
+### Status
+
+Active.

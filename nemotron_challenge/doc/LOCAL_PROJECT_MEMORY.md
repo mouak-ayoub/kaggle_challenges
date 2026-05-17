@@ -31,6 +31,16 @@ Prepare the next serious method while keeping the workflow simple:
 3. Build Kaggle submissions locally from Colab run bundles.
 4. Start the next procedural-supervision direction, likely short traces or a STaR-like bootstrap, only after the notebook path stays simple.
 
+Current collaboration loop:
+
+1. Brainstorm candidate ideas together, with critique focused on simple non-trivial methods that can plausibly move the score.
+2. Choose one idea before implementation; avoid mixing unrelated knobs unless there is a deliberate reason.
+3. Implement the selected idea as a notebook-first experiment with Occam's razor.
+4. Run it in Colab, then copy/download the run bundle and diagnostics locally.
+5. Build the strict Kaggle `submission.zip` locally from the run bundle adapter files.
+6. Update the experiment dashboard, checklist, memory, and decision log with the evidence.
+7. Iterate until the public score reaches at least `0.7` or the evidence forces a better target strategy.
+
 ## Recent Milestones
 
 - Created project documentation split:
@@ -77,6 +87,11 @@ Prepare the next serious method while keeping the workflow simple:
 - The Colab notebooks now write one `{EXPERIMENT_NAME}_run_bundle.zip` per finished run instead of separate Colab submission and diagnostics zips. The run bundle includes adapter files plus diagnostics/eval files; local packaging builds the Kaggle `submission.zip` from the bundle adapter files with `scripts/build_submission_from_run_bundle.py`.
 - Simplified the Colab notebooks around the current Drive-only workflow: removed the non-Colab GPU-inventory branch, removed the Google Drive backup switch, and replaced resume/fresh-run switches with `RESUME_FROM_CHECKPOINT=False` plus `RESUME_CHECKPOINT_STEP=None`. For a resume, set the boolean true and choose the checkpoint number; for a clean rerun, use a new `EXPERIMENT_NAME` or manually clear the old output directory.
 - Added generated-answer checkpoint eval during training with one switch, `GENERATED_EVAL_ROWS_ON_SAVE`. Use `EVAL_ROWS` for full checkpoint summaries under `checkpoint_eval/checkpoint_generated_eval_summary.csv`, `64` for cheaper tracking, or `0` to disable.
+- Added `scripts/build_experiment_dashboard.py`, a local HTML dashboard builder that scans `data/outputs/submissions/`, diagnostics zips, run bundles, and copied run folders. It shows public scores, train/eval loss by run/checkpoint, probe evolution, generated-eval summaries, and grouped responses to the three public sanity test prompts. S4 checkpoint generated-eval CSVs from Drive are now copied under the S4 archive's `checkpoint_eval/` folder and appear in the local dashboard. The older 0.62 run did not save a sanity CSV, so its final three sanity answers were recovered into a local ignored CSV from the displayed notebook output.
+- The local dashboard remains a plain HTML report, but its graphs now use Chart.js canvases instead of hand-drawn SVG so axes, ticks, tooltips, legends, and small family charts are more readable without introducing a notebook report.
+- Added `notebooks/tools/04_colab_backfill_generated_eval.ipynb` as the single Colab backfill artifact for old submissions, separated from normal training notebooks. It scores already submitted adapter zips on the same fixed 256-row generated-eval split and fixed five-row probe set. Its default run list backfills the 0.62 raw baseline (`00-raw-1024`) and the 0.54 full raw control (`02-raw-full`). The dashboard will pick up each resulting `generated_eval_summary.csv` and `probe_evolution.csv` after they are copied into the matching local submission archive folder.
+- First Colab backfill result for `00-raw-1024` completed: generated eval `65/256 = 0.253906`. Family accuracy was bit manipulation `2/45`, cipher `0/43`, equation `2/39`, gravity `1/41`, numeral `52/52`, unit conversion `8/36`. This is lower than S4 local generated eval despite the much better public score, reinforcing that the 256-row local generated eval is diagnostic but not a public-score proxy.
+- The downloaded `00-raw-1024` backfill CSVs were copied into `data/outputs/submissions/2026-05-16_colab_nemotron_lora_score_0_62/`. The downloaded `02-raw-full` backfill CSVs were copied into `data/outputs/submissions/2026-05-17_colab_raw_full_r4_score_0_54/`. The dashboard now compares `00-raw-1024`, `02-raw-full`, and S4 checkpoints on the same 256-row generated eval and five-row probe set.
 - The local Colab notebook `notebooks/01_colab_train_and_submit.ipynb` is currently configured for direct import as `S4_attention_expand_r8_private_boxed_max128_drive`: Drive-backed outputs, explicit checkpoint resume disabled by default, boxed/private prompt, LoRA `r=8` alpha `64`, expanded attention targets `in_proj/out_proj/q_proj/k_proj/v_proj/o_proj`, `MAX_NEW_TOKENS=128`, and effective batch `16*3=48`.
 - Created `notebooks/03_colab_short_trace_train_and_submit.ipynb` for the short procedural-trace experiment `S6_short_trace_boxed_r8_attention_drive`. It adds compact cipher traces before a final boxed answer for parseable cipher rows, falls back to boxed targets for other rows, and writes `trace_training_samples.csv` into diagnostics. Local audit found `1,576 / 9,500` train rows receive a cipher trace.
 - Added the next planned method idea `S7_starish_short_trace_bootstrap`: a STaR-like training-time loop that generates candidate short traces, filters/checks them against known train answers, corrects failed cases using gold answers, then trains a Kaggle-compatible LoRA adapter with ordinary SFT. This is bootstrapped supervised fine-tuning, not inference-time agent execution.

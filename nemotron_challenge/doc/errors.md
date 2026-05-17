@@ -318,3 +318,26 @@ Long or mechanical traces may be correct but hard for the model to learn under L
 Lesson:
 
 Evaluate synthetic data for learnability, not only correctness. Prefer short traces, strict final boxed answers, and category-level validation before trusting a new generated dataset.
+
+## Colab Torch Import Corruption After Wrong Runtime Installs
+
+Symptom:
+
+```text
+RuntimeError: Trying to override a python impl for DispatchKey.Autograd on operator aten::dropout
+```
+
+or the runtime reports CPU Torch, for example:
+
+```text
+torch 2.10.0+cpu
+cuda available: False
+```
+
+Cause:
+
+The Colab runtime is not in a clean GPU Torch state, usually after running install cells in a CPU runtime or after a failed/partial Torch-related package setup. Once `import torch` itself fails, later notebook cells cannot reliably repair the process.
+
+Lesson:
+
+Restart or factory-reset the Colab runtime, select a GPU runtime before running installs, and verify `import torch`, `torch.cuda.is_available()`, and BF16 support before any heavy package installs. Do not install or upgrade `torch` inside the Nemotron notebooks unless there is a concrete reason.
