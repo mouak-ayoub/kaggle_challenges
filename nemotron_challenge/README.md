@@ -2,18 +2,17 @@
 
 This repository is for a gradual Kaggle workflow around the NVIDIA Nemotron Model Reasoning Challenge.
 
-The first goal is not to train immediately. The first goal is to make the project inspectable: understand the data, reproduce a simple baseline, record decisions, and only then move toward prompting, answer extraction, synthetic data, LoRA/SFT, or selection strategies.
+The project has moved past bootstrap into Colab LoRA experiments. The current focus is keeping the training and artifact workflow simple enough to trust while testing better supervision methods such as short traces and STaR-like bootstrapping.
 
 ## Current Milestone
 
-Bootstrap the repository with:
+Current milestone:
 
-- project memory and decision logs inspired by the PhysioNet project
-- a small `src/` package for reusable logic
-- dataset inspection utilities
-- an initial reasoning-challenge roadmap
-
-No competition data has been downloaded into this repository yet.
+- train Nemotron LoRA adapters in Colab with Drive-backed outputs
+- save probe, checkpoint generated-eval, final generated-eval, and sanity outputs for reports
+- download one `{EXPERIMENT_NAME}_run_bundle.zip` per finished run
+- build Kaggle `submission.zip` locally from the run bundle adapter files
+- keep Occam audits after important notebook/workflow changes so stale switches and duplicate artifacts do not accumulate
 
 ## 0) Context
 
@@ -72,14 +71,14 @@ The project should grow in stages:
 Planned layout:
 
 - `config/`: small YAML configuration files
-- `data/raw/`: official competition files, ignored by git
-- `data/interim/`: parsed intermediate artifacts, ignored by git
-- `data/processed/`: model-ready derived files, ignored by git
+- `data/`: local raw data, generated outputs, and external reference pulls, ignored by git
+- `data/raw/`: official competition files
+- `data/outputs/`: local runs, traces, submission archives, and reports
+- `data/reference/`: local external references such as pulled Kaggle notebooks
 - `doc/`: project memory, decisions, and important error notes
 - `notebooks/`: exploration and visual reports
 - `scripts/`: small command-line helpers
 - `src/nemotron_challenge/`: reusable project code
-- `outputs/`: local runs, traces, and reports, ignored by git
 
 ## 3) Early Strategy
 

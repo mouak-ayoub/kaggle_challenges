@@ -21,6 +21,10 @@ Use them for different purposes:
 ## Working Rules
 
 - Use Occam's razor: start with the simplest coherent change that can explain or fix the observed problem. Add complexity only when the simple path fails with evidence.
+- Treat Occam's razor as the guiding principle after repeated notebook iterations: when a config switch or fallback is no longer needed, remove it rather than documenting around it.
+- After each milestone or important workflow change, run a short Occam audit before moving on: check active notebooks, scripts, and docs for stale switches, duplicated outputs, unclear artifact paths, and complex branches that can be replaced by one explicit path.
+- Keep the audit principle-based, not checklist-based. Specific fixes from the current run are examples; the durable rule is to prefer one coherent path, remove speculative branches, and keep boundaries clear.
+- Occam's razor does not mean deleting useful material or minimizing file count at any cost. It means choosing the minimum non-trivial structure that preserves evidence, keeps intent clear, and avoids speculative complexity.
 - Keep code simple by default. Do not add broad edge-case handling, fallback branches, or clever abstractions before the project has actually hit that case.
 - Keep notebook configuration in one small top cell until there is a clear reason to move it elsewhere. Do not scatter model names, LoRA settings, path constants, and generation settings across many cells.
 - Prefer one clear path that works over several partially supported paths. Add complexity only after a concrete failure or repeated need.

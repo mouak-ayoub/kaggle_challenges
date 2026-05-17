@@ -1,6 +1,6 @@
 # Project Decision Log
 
-Last updated: 2026-05-16
+Last updated: 2026-05-17
 
 This file records durable project decisions. It is not a scratchpad.
 
@@ -181,7 +181,29 @@ The only high-scoring observed submission so far is the raw-target Nemotron LoRA
 
 ### Consequence
 
-Compare the full-row raw run against 0.62 first. If it does not improve enough, submit a separate prompt/target experiment and track it independently in `outputs/submissions/`.
+Compare the full-row raw run against 0.62 first. If it does not improve enough, submit a separate prompt/target experiment and track it independently in `data/outputs/submissions/`.
+
+### Status
+
+Superseded by the `S1_raw_full_r4` result.
+
+## Decision: Stop Scaling Raw-Only Final-Answer SFT
+
+### Context
+
+The known best Colab Nemotron submission scored about `0.62` with raw short-answer SFT on a 1,024-row subset. The next control run scaled the same direct/raw setup to the full train split minus 256 eval rows.
+
+### Decision
+
+Do not spend more submissions on raw-only final-answer SFT as the main path. Prioritize metric-aligned boxed outputs, expanded target modules, and short procedural trace supervision.
+
+### Evidence
+
+`S1_raw_full_r4` / `ACTIVE_02_raw_full_r4` trained cleanly and eval loss improved monotonically to about `0.7933`, but the fixed probe stayed `1/5` and the public leaderboard score was `0.54`, below the partial raw baseline at about `0.62`.
+
+### Consequence
+
+Eval loss on final-answer SFT is not a reliable proxy for hidden reasoning score. The next serious experiments should test whether the model learns procedures, not just answer priors and output brevity.
 
 ### Status
 
@@ -195,7 +217,7 @@ Long Nemotron LoRA runs in Colab can be interrupted or reclaimed automatically, 
 
 ### Decision
 
-Write experiment outputs, checkpoints, submission zips, diagnostics, trainer logs, and probe evolution files to Google Drive by default. Keep raw competition data local for speed, but persist training outputs under `/content/drive/MyDrive/nemotron_challenge/outputs/{EXPERIMENT_NAME}`.
+Write experiment outputs, checkpoints, run bundles, trainer logs, and probe evolution files to Google Drive by default. Keep raw competition data local for speed, but persist training outputs under `/content/drive/MyDrive/Colab_Notebooks/Kaggle challenges/nemotron_challenge/artefacts/outputs/{EXPERIMENT_NAME}`.
 
 ### Evidence
 
@@ -203,7 +225,53 @@ The `03` and `04` Colab sessions disconnected automatically and their runtime-lo
 
 ### Consequence
 
-The Colab notebook now mounts Drive, uses Drive-backed `OUTPUT_DIR`, and auto-resumes from the latest checkpoint unless explicitly disabled. Starting a clean rerun with the same `EXPERIMENT_NAME` requires changing the experiment name or manually clearing the old Drive output directory.
+The Colab notebook now mounts Drive and uses Drive-backed `OUTPUT_DIR`. Resume is opt-in: keep `RESUME_FROM_CHECKPOINT=False` for a fresh run, or set it true and choose `RESUME_CHECKPOINT_STEP` to continue from `OUTPUT_DIR/checkpoint-{step}`. If resume is false and old checkpoints exist, training stops instead of silently mixing runs. Starting a clean rerun with the same `EXPERIMENT_NAME` requires changing the experiment name or manually clearing the old Drive output directory.
+
+Generated-answer checkpoint eval runs during training when `GENERATED_EVAL_ROWS_ON_SAVE` is above `0`. The current serious-run default is `EVAL_ROWS`, which scores the full fixed eval split at each saved checkpoint. Set it to `64` for cheaper tracking or `0` to disable. Checkpoint summaries are written to `checkpoint_eval/checkpoint_generated_eval_summary.csv` and included in the run bundle.
+
+### Status
+
+Active.
+
+## Decision: Build Kaggle Submission Zips Locally From Colab Run Bundles
+
+### Context
+
+The Colab notebooks previously wrote both a standalone Kaggle `submission.zip` and a diagnostics zip that also embedded the submission zip. That created ambiguity about which zip should be uploaded and made Drive contain duplicate packaged artifacts for the same run.
+
+### Decision
+
+At the end of each Colab run, write one portable `{EXPERIMENT_NAME}_run_bundle.zip`. The bundle contains `adapter/adapter_config.json`, `adapter/adapter_model.safetensors`, run configuration, trainer logs, probe logs, generated-eval files, checkpoint-eval files when present, and TensorBoard events. Build the actual Kaggle `submission.zip` locally from the bundle adapter files.
+
+### Evidence
+
+The Kaggle artifact must contain only `adapter_config.json` and `adapter_model.safetensors` at the zip root. Diagnostics and checkpoint-eval files are needed for local reports but must not be mixed into the upload artifact.
+
+### Consequence
+
+Colab is responsible for training and producing one run bundle. The local repository is responsible for extracting/analyzing that bundle and creating the final Kaggle upload with `scripts/build_submission_from_run_bundle.py`.
+
+### Status
+
+Active.
+
+## Decision: Do Not Continue Final-Answer Boxed SFT Without Procedural Supervision
+
+### Context
+
+The `S4_attention_expand_r8_private_boxed_max128_drive` run trained full-data boxed targets with a private-reasoning prompt, LoRA rank 8, and expanded attention target modules.
+
+### Decision
+
+Do not repeat this exact final-answer boxed SFT path as the main strategy. Future serious attempts should add procedural supervision, checkpoint selection from generated eval, or category-specific data rather than just stronger boxed-format LoRA.
+
+### Evidence
+
+The final/current S4 adapter had clean boxed outputs and local generated eval `95/256 = 0.371`, but the public score was only `0.53`. It was strong on numerals but weak on cipher, equation, gravity, and bit manipulation. The 5-row probe also showed loss improving while reasoning correctness oscillated and final step regressed to `1/5`.
+
+### Consequence
+
+Boxed formatting helps extraction discipline but is not enough to improve reasoning. Prioritize short procedural traces, STaR-like bootstrapping, and checkpoint selection by generated eval family accuracy.
 
 ### Status
 

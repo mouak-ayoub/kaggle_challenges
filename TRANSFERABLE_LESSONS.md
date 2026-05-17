@@ -59,6 +59,20 @@ If the input geometry is unstable, boundary detection and canonicalization may n
 
 ## Notebook And Refactoring Practice
 
+### Occam audits should stay principle-based
+
+After repeated notebook or pipeline iterations, run a short simplification pass before calling the work done.
+
+The durable rule is not a hardcoded checklist from the last project. It is:
+- prefer one coherent path over several partially supported paths
+- remove speculative switches, fallback branches, and duplicate artifacts
+- keep validation at real boundaries instead of repeating the same check everywhere
+- keep workflow sections separated by purpose so the next run is easy to inspect
+
+Occam's razor does not mean deleting useful material or minimizing file count at any cost. It means choosing the minimum non-trivial structure that preserves evidence, keeps intent clear, and avoids speculative complexity.
+
+Specific examples from one repository should remain examples, not permanent rules.
+
 ### Separate stable method logic from debug logic
 
 Keep these separate:

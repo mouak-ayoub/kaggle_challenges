@@ -158,6 +158,22 @@ Lesson:
 
 FP32 is a debugging workaround, not the desired training precision. Prefer BF16 on A100/H100 if the MoE dtype mismatch is fixed or avoided.
 
+## PEFT `load_adapter` Fails On Nemotron Checkpoint Eval
+
+Symptom:
+
+```text
+TypeError: WeightConverter.__init__() got an unexpected keyword argument 'distributed_operation'
+```
+
+Cause:
+
+In the Colab PEFT/Transformers stack, calling `current_model.load_adapter(...)` on the already wrapped Nemotron PEFT model can hit a conversion-mapping incompatibility while loading saved LoRA checkpoints.
+
+Lesson:
+
+Do not rerun an expensive completed eval if the failure happens after predictions were appended in notebook memory. First save the partial `all_predictions` / `all_summaries` result. For checkpoint comparison, avoid `load_adapter` and directly load `adapter_model.safetensors` into the existing active LoRA adapter by mapping saved keys like `.lora_A.weight` to the in-memory keys like `.lora_A.default.weight`.
+
 ## Naive Mamba Path OOM At Long Sequence Length
 
 Symptom:
