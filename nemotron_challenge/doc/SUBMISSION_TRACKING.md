@@ -16,6 +16,7 @@ Current tracked submissions:
 | `2026-05-16_local_smol_lora_score_0_50` | ~0.50 | Local PyCharm/Windows | Submission-mechanics control. Adapter config points to SmolLM, so do not treat it as a Nemotron modeling baseline. The notebook snapshot is closest available, not guaranteed exact pre-submit state. |
 | `2026-05-17_colab_raw_full_r4_score_0_54` | 0.54 | Colab | Full-data raw-answer control. Training/eval looked clean, but score dropped below the 0.62 partial baseline; do not keep scaling raw-only final-answer SFT as the main path. |
 | `2026-05-17_colab_s4_attention_boxed_r8_final_score_0_53` | 0.53 | Colab | S4 final adapter: boxed/private prompt, rank 8, expanded attention targets. It learned clean boxed format but scored below the 0.62 raw partial baseline and 0.54 raw full-data control; local current-193 generated eval was `95/256 = 0.371`, with strong numerals but weak cipher/equation/gravity. |
+| `2026-05-17_colab_s4_checkpoint144_score_0_55` | 0.55 | Colab checkpoint | S4 checkpoint-144 adapter: boxed/private prompt, rank 8, expanded attention targets. Local generated eval was `90/256 = 0.351562`, lower than current-193 aggregate, but public score improved over S4 final/current 0.53. Still below the 0.62 raw-answer baseline. |
 
 Generated files:
 

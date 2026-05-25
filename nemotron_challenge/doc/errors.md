@@ -264,6 +264,10 @@ Lesson:
 
 If testing boxed-output training or prompting, train the model to output exactly one final `\boxed{...}` answer and no trailing text. Keep raw completions so extraction failures can be separated from reasoning failures.
 
+Update on 2026-05-24:
+
+The pulled official metric notebook under `data/reference/kaggle/metric/` uses the updated last-brace extractor. Local notebooks and dashboard matching were aligned to that behavior and to Kaggle's verifier: binary answers compare strictly, numeric answers use `math.isclose(..., rel_tol=1e-2, abs_tol=1e-5)`, and other strings compare case-insensitively. Do not use a naive first-`}` boxed regex to audit equation rows; it over-reports failures that Kaggle's current parser handles.
+
 ## Kaggle External Training Submission
 
 Symptom:

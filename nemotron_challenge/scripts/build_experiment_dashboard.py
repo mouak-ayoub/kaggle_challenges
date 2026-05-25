@@ -83,6 +83,20 @@ def normalize_answer(value: Any) -> str:
     return str(value).strip().lower()
 
 
+def verify_answer(stored_answer: Any, predicted: Any) -> bool:
+    """Match Kaggle's metric verifier for local dashboard summaries."""
+    stored_text = "" if stored_answer is None else str(stored_answer).strip()
+    predicted_text = "" if predicted is None else str(predicted).strip()
+    if re.fullmatch(r"[01]+", stored_text):
+        return predicted_text.lower() == stored_text.lower()
+    try:
+        stored_num = float(stored_text)
+        predicted_num = float(predicted_text)
+        return math.isclose(stored_num, predicted_num, rel_tol=1e-2, abs_tol=1e-5)
+    except Exception:
+        return predicted_text.lower() == stored_text.lower()
+
+
 def find_zip_member(names: list[str], basename: str) -> str | None:
     matches = [name for name in names if Path(name).name == basename]
     if not matches:
@@ -521,7 +535,7 @@ def sanity_predictions(exp: Experiment) -> pd.DataFrame:
     work["score"] = exp.score_public
     work["family"] = work["id"].map(lambda row_id: TEST_REFERENCE.get(str(row_id), {}).get("family"))
     work["gold"] = work["id"].map(lambda row_id: TEST_REFERENCE.get(str(row_id), {}).get("gold"))
-    work["match"] = work.apply(lambda row: normalize_answer(row.get("answer")) == normalize_answer(row.get("gold")), axis=1)
+    work["match"] = work.apply(lambda row: verify_answer(row.get("gold"), row.get("answer")), axis=1)
     cols = [
         "run",
         "experiment",
@@ -584,11 +598,30 @@ def experiment_code(exp: Experiment) -> str:
     return short[:18] or "run"
 
 
+def public_score_label(exp: Experiment) -> str:
+    label = experiment_code(exp)
+    if label != "04-s4":
+        return label
+    text = f"{exp.name} {exp.method or ''}".lower()
+    cfg = exp.run_config
+    checkpoint = str(cfg.get("checkpoint", "")).lower()
+    step = to_number(cfg.get("step"))
+    if "checkpoint-144" in checkpoint or step == 144 or "checkpoint144" in text:
+        return "04-s4-step-144"
+    if "final" in text or step == 193:
+        return "04-s4-final"
+    return label
+
+
 def point_label(exp: Experiment, step: Any = None) -> str:
     numeric_step = to_number(step)
+    base = experiment_code(exp)
     if numeric_step is None:
-        return experiment_code(exp)
-    return f"{experiment_code(exp)}-step-{int(numeric_step)}"
+        return base
+    step_suffix = f"step-{int(numeric_step)}"
+    if base.endswith(step_suffix):
+        return base
+    return f"{base}-{step_suffix}"
 
 
 def run_legend_table(experiments: list[Experiment]) -> pd.DataFrame:
@@ -716,7 +749,7 @@ def comparison_public_score(experiments: list[Experiment]) -> tuple[list[str], l
         score = to_number(exp.score_public)
         if score is None:
             continue
-        label = experiment_code(exp)
+        label = public_score_label(exp)
         add_unique(labels, label)
         values[label] = score
     return labels, [("public score", values)]

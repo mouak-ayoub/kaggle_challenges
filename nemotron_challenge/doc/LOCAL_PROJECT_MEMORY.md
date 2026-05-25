@@ -1,6 +1,6 @@
 # Local Project Memory
 
-Last updated: 2026-05-17
+Last updated: 2026-05-24
 
 ## Current State
 
@@ -10,10 +10,12 @@ Known facts:
 
 - The local repository started empty.
 - The nearby `Physionet_ECG_challenge` project was used as inspiration for project organization.
-- Official Kaggle competition data is present locally under `data/raw/`.
+- Official Kaggle competition data is normalized locally under `data/input/`.
 - The downloaded zip was extracted and deleted.
-- Official `train.csv` has 9,500 rows with columns `id`, `prompt`, `answer`.
-- Official `test.csv` has 3 rows with columns `id`, `prompt`.
+- Local `data/input/train.csv` has 9,500 rows with columns `id`, `question`, `gold_answer`.
+- Local `data/input/test.csv` has 3 rows with columns `id`, `question`.
+- Local `data/input/trace_training.csv` has 9,497 rows with columns `id`, `question`, `trace`, `gold_answer`; it excludes the three public sanity `test.csv` IDs.
+- Local `data/input/bit_candidate_trace_audit.csv` is the retained verifier input for rebuilding bit-manipulation traces. `data/outputs/` is reserved for generated Colab/local artifacts, not builder dependencies.
 - Kaggle requires a LoRA adapter packaged as `submission.zip`, not a prediction CSV.
 - The active Colab notebooks write test predictions only as sanity CSVs and package one `{EXPERIMENT_NAME}_run_bundle.zip`; Kaggle `submission.zip` is built locally from the bundle adapter files.
 - Kaggle discussion access via API is working with local auth. Useful findings are now recorded in `doc/errors.md` and `doc/PROJECT_DECISION_LOG.md`.
@@ -29,7 +31,8 @@ Prepare the next serious method while keeping the workflow simple:
 1. Keep the active Colab notebooks Drive-backed and directly runnable.
 2. Use probe-on-log, generated-eval-on-save, and final generated eval to compare checkpoints and final adapters.
 3. Build Kaggle submissions locally from Colab run bundles.
-4. Start the next procedural-supervision direction, likely short traces or a STaR-like bootstrap, only after the notebook path stays simple.
+4. Start the next procedural-supervision direction as solver-guided STaR: generate, verify, filter, and train on compact reasoning traces from our own pipeline rather than copying public trajectory notebooks or datasets.
+5. Build `eval_v2` before trusting another large run: larger, family-balanced, grouped where feasible, and reporting hard-family accuracy excluding numeral.
 
 Current collaboration loop:
 
@@ -41,6 +44,8 @@ Current collaboration loop:
 6. Update the experiment dashboard, checklist, memory, and decision log with the evidence.
 7. Iterate until the public score reaches at least `0.7` or the evidence forces a better target strategy.
 
+Originality constraint: all outside research is allowed as literature, tools, and inspiration, including papers, open-source code, Reddit/Medium/Substack posts, YouTube talks, other-domain competition ideas, and reasoning-challenge methods that are not from this exact Nemotron Kaggle challenge. Do not inspect or copy another active Nemotron challenge competitor's high-scoring notebook, GitHub repo, trajectory dataset, or submission path as the main method unless explicitly approved. The goal is to discover this project's own trajectory and learn the research process.
+
 ## Recent Milestones
 
 - Created project documentation split:
@@ -51,7 +56,7 @@ Current collaboration loop:
   - `doc/errors.md`
 - Created initial reusable package shape under `src/nemotron_challenge/`.
 - Added a dataset inspection script.
-- Extracted official data into `data/raw/` and deleted the downloaded zip.
+- Normalized official data into `data/input/` and deleted the downloaded zip.
 - Confirmed the official train/test schemas with `scripts/inspect_dataset.py`.
 - Updated the submission path so Colab saves adapter files in a run bundle and the local helper builds the strict Kaggle upload zip.
 - Read key Kaggle discussion threads on submission packaging, metric updates, vLLM nondeterminism, boxed-answer extraction, and Kaggle environment issues.
@@ -60,6 +65,7 @@ Current collaboration loop:
   - Colab Nemotron adapter scored about 0.62
 - The full-data raw Nemotron control `S1_raw_full_r4` / `ACTIVE_02_raw_full_r4` scored `0.54`, worse than the 0.62 partial baseline despite clean training and lower eval loss.
 - The S4 final/current run `S4_attention_expand_r8_private_boxed_max128_drive` scored `0.53`; it learned clean boxed output formatting but did not improve reasoning enough to beat raw baselines.
+- The S4 checkpoint-144 adapter scored `0.55`, slightly above the S4 final/current adapter but still below the `0.62` raw-answer baseline. This confirms checkpoint timing matters, but it does not rescue final-answer boxed SFT as the main path.
 - Partial S4 saved-checkpoint generated eval now shows checkpoint 96 at `79/256 = 0.308594` and checkpoint 144 at `90/256 = 0.351562`, both below final/current step 193 at `95/256 = 0.371094`; checkpoint 192 is still pending until its saved summary row appears.
 - Archived the two accepted submission zips under `data/outputs/submissions/`:
   - `2026-05-16_colab_nemotron_lora_score_0_62/`
@@ -92,14 +98,22 @@ Current collaboration loop:
 - Added `notebooks/tools/04_colab_backfill_generated_eval.ipynb` as the single Colab backfill artifact for old submissions, separated from normal training notebooks. It scores already submitted adapter zips on the same fixed 256-row generated-eval split and fixed five-row probe set. Its default run list backfills the 0.62 raw baseline (`00-raw-1024`) and the 0.54 full raw control (`02-raw-full`). The dashboard will pick up each resulting `generated_eval_summary.csv` and `probe_evolution.csv` after they are copied into the matching local submission archive folder.
 - First Colab backfill result for `00-raw-1024` completed: generated eval `65/256 = 0.253906`. Family accuracy was bit manipulation `2/45`, cipher `0/43`, equation `2/39`, gravity `1/41`, numeral `52/52`, unit conversion `8/36`. This is lower than S4 local generated eval despite the much better public score, reinforcing that the 256-row local generated eval is diagnostic but not a public-score proxy.
 - The downloaded `00-raw-1024` backfill CSVs were copied into `data/outputs/submissions/2026-05-16_colab_nemotron_lora_score_0_62/`. The downloaded `02-raw-full` backfill CSVs were copied into `data/outputs/submissions/2026-05-17_colab_raw_full_r4_score_0_54/`. The dashboard now compares `00-raw-1024`, `02-raw-full`, and S4 checkpoints on the same 256-row generated eval and five-row probe set.
+- Created `doc/external_review_pack/` with a self-contained ChatGPT Pro review brief. The brief summarizes completed runs, configs, public scores, local generated eval, family breakdowns, and probe/loss/sanity results, without runtime bug details, backfill mechanics, or our own next-method recommendations.
 - The local Colab notebook `notebooks/01_colab_train_and_submit.ipynb` is currently configured for direct import as `S4_attention_expand_r8_private_boxed_max128_drive`: Drive-backed outputs, explicit checkpoint resume disabled by default, boxed/private prompt, LoRA `r=8` alpha `64`, expanded attention targets `in_proj/out_proj/q_proj/k_proj/v_proj/o_proj`, `MAX_NEW_TOKENS=128`, and effective batch `16*3=48`.
-- Created `notebooks/03_colab_short_trace_train_and_submit.ipynb` for the short procedural-trace experiment `S6_short_trace_boxed_r8_attention_drive`. It adds compact cipher traces before a final boxed answer for parseable cipher rows, falls back to boxed targets for other rows, and writes `trace_training_samples.csv` into diagnostics. Local audit found `1,576 / 9,500` train rows receive a cipher trace.
+- Created `notebooks/03_colab_short_trace_train_and_submit.ipynb` for the short procedural-trace experiment `S6_short_trace_boxed_r8_attention_drive`. It adds compact cipher traces before a final boxed answer for parseable cipher rows and falls back to boxed targets for other rows. This notebook-local trace construction is now superseded by the single `data/input/trace_training.csv` input file.
 - Added the next planned method idea `S7_starish_short_trace_bootstrap`: a STaR-like training-time loop that generates candidate short traces, filters/checks them against known train answers, corrects failed cases using gold answers, then trains a Kaggle-compatible LoRA adapter with ordinary SFT. This is bootstrapped supervised fine-tuning, not inference-time agent execution.
+- Recorded the external-review synthesis under `doc/external_review_pack/GLOBAL_REVIEW_RESPONSE.md`: use public reasoning trajectories as evidence/reference only, and pursue an original solver-guided STaR path with family-specific verifiers, starting with `eval_v2` and small verified trace runs.
 - Naming convention decision: use the top-cell `EXPERIMENT_NAME` as the source of truth for all paths, diagnostics, zips, archive folders, and Kaggle descriptions. Future experiment names should use lowercase `expNN_short_method_key_knobs`; do not rename an already-running Drive-backed experiment because that changes the checkpoint directory.
+- Collapsed the local challenge input boundary to `data/input/`. The generated `trace_training.csv` uses `id`, `question`, `trace`, and `gold_answer` for 9,497 train rows after excluding the three public sanity `test.csv` IDs. Cipher rows now use a deterministic two-template mix for 1,575 cipher rows: about 70% compact mapping traces and 30% source-rich traces. Both templates preserve multiline structure, mark characters not determined by examples, use phrase context only for those unknowns, and end with exactly one boxed final answer. Gravity rows now use formula-first traces for all 1,597 rows: infer `g` from examples with `g = 2*d/t^2`, mention rounded observations, apply `d = 0.5*g*t^2` to the target, and end with exactly one boxed final answer. Unit conversion rows now use a deterministic mixed target style: 782 short traces, 419 full ratio traces, and 393 boxed-only rows. Numeral rows now stay mostly boxed-only with a small deterministic short-trace slice: 155 short Roman-style decomposition traces and 1,421 boxed-only rows. Bit manipulation rows now use verifier-gated DSL traces for 942 rows from `data/input/bit_candidate_trace_audit.csv`; the 658 bit rows without parseable verified rules stay boxed-only. Equation char-substitution v0 was audited and rejected for training because all 1,555 equation rows have length-changing examples, so equation currently stays boxed-only.
+- Updated `notebooks/03_colab_short_trace_train_and_submit.ipynb` into the current Colab launch notebook for `exp05_trace_occam_r4_inout`. It now loads canonical `trace_training.csv` with columns `id`, `question`, `trace`, `gold_answer` instead of rebuilding cipher traces notebook-locally. In Colab it expects `/content/trace_training.csv` and `/content/test.csv`; repo `data/input/` remains only a local dry-run fallback. It trains with a prompt/completion dataset and `completion_only_loss=True`, so the model reads `System/User/Assistant:` as context and receives loss only on the trace/answer completion. Before training starts, it runs a label-mask assertion from the actual trainer dataloader and stops if the first trained labels do not start with `Thinking:` or `Final answer:`. The active Occam config uses `MAX_SEQ_LENGTH=512`, `MAX_NEW_TOKENS=384`, LoRA `r=4`, alpha `32`, target modules `in_proj/out_proj`, and learning rate `1e-4`.
+- Notebook `03` no longer has generated-eval display switches. Checkpoint and final generated-eval runs save raw completions, including any visible thinking, to CSV files under `checkpoint_eval/` and in the final generated-eval CSV for direct inspection.
+- Notebook `03` prints row-level progress only for the initial pre-training `probe_before` generation cell, so that cell is not silent while it runs. Checkpoint, final, and sanity generation keep the previous behavior; detailed raw completions remain in CSV files.
+- Notebook `03` generation now uses `GENERATION_BATCH_SIZE=8` inside `generate_answers` while preserving the same call sites, output columns, extraction path, and display behavior. Batched decoder-only generation temporarily sets `tokenizer.padding_side="left"` before tokenization and restores the prior setting afterward; right padding caused empty one-token outputs for shorter prompts. The `seconds` column is now the batch wall time divided across rows because batched generation no longer has an exact per-row wall time.
+- Aligned local extraction/matching with the pulled Kaggle metric notebook: notebooks now use the last-brace boxed extractor and Kaggle-style `verify_answer` with strict binary matching and numeric tolerance. Equation answers with literal braces/backslashes round-trip through `\boxed{...}` under the official-like extractor, so boxed equation targets are not automatically malformed under the current metric.
 
 ## Open Questions
 
 - Does Kaggle provide a starter notebook or only data files?
-- Is local validation possible from the official train file?
+- Can `eval_v2` produce a validation signal that is less anti-correlated with public score than the current 256-row generated eval?
 - Superseded: the full-row raw-target run did not improve over the 0.62 partial baseline; it scored 0.54.
 - Does a boxed or private-reasoning prompt improve the score, or does it mainly add format/extraction failures?

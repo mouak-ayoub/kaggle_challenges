@@ -71,9 +71,9 @@ The project should grow in stages:
 Planned layout:
 
 - `config/`: small YAML configuration files
-- `data/`: local raw data, generated outputs, and external reference pulls, ignored by git
-- `data/raw/`: official competition files
-- `data/outputs/`: local runs, traces, submission archives, and reports
+- `data/`: local inputs, generated outputs, and external reference pulls, ignored by git
+- `data/input/`: the three active challenge input files: `train.csv`, `test.csv`, and `trace_training.csv`
+- `data/outputs/`: local run diagnostics, submission archives, and reports
 - `data/reference/`: local external references such as pulled Kaggle notebooks
 - `doc/`: project memory, decisions, and important error notes
 - `notebooks/`: exploration and visual reports
