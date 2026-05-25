@@ -36,6 +36,10 @@ TEST_REFERENCE = {
     "00189f6a": {"family": "cipher", "gold": "cat imagines book"},
 }
 FAMILY_ORDER = ["bit_manipulation", "cipher", "equation", "gravity", "numeral", "unit_conversion"]
+FAMILY_ALIASES = {
+    "equation_symbolic": "equation",
+    "equation_numeric": "equation",
+}
 
 
 @dataclass
@@ -54,7 +58,7 @@ class Experiment:
 def read_json_path(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def to_number(value: Any) -> float | None:
@@ -71,6 +75,13 @@ def to_number(value: Any) -> float | None:
         return None
 
 
+def to_int(value: Any) -> int | None:
+    number = to_number(value)
+    if number is None or not math.isfinite(number):
+        return None
+    return int(number)
+
+
 def normalize_bool(value: Any) -> bool:
     return str(value).strip().lower() in {"true", "1", "yes"}
 
@@ -81,6 +92,11 @@ def normalize_answer(value: Any) -> str:
     if isinstance(value, float) and math.isnan(value):
         return ""
     return str(value).strip().lower()
+
+
+def normalize_family(value: Any) -> str:
+    family = "" if value is None else str(value).strip()
+    return FAMILY_ALIASES.get(family, family)
 
 
 def verify_answer(stored_answer: Any, predicted: Any) -> bool:
@@ -115,7 +131,111 @@ def read_json_from_zip(zf: zipfile.ZipFile, names: list[str], basename: str) -> 
     member = find_zip_member(names, basename)
     if member is None:
         return {}
-    return json.loads(zf.read(member).decode("utf-8"))
+    return json.loads(zf.read(member).decode("utf-8-sig"))
+
+
+def step_from_text(value: Any) -> int | None:
+    text = str(value or "").lower()
+    for pattern in [r"checkpoint[-_\s]?(\d+)", r"step[-_\s]?(\d+)", r"current[-_\s]?(\d+)"]:
+        match = re.search(pattern, text)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def metadata_generated_eval_steps(metadata: dict[str, Any]) -> list[int]:
+    steps: list[int] = []
+    for key in metadata:
+        if not str(key).startswith("local_generated_eval_"):
+            continue
+        match = re.search(r"_(\d+)$", str(key))
+        if match:
+            steps.append(int(match.group(1)))
+    return sorted(set(steps))
+
+
+def submitted_step(exp: Experiment) -> int | None:
+    """Return the actual submitted checkpoint step when the archive identifies one."""
+    metadata = exp.metadata or {}
+    cfg = exp.run_config or {}
+
+    for value in [
+        metadata.get("submitted_step"),
+        metadata.get("checkpoint_step"),
+        cfg.get("submitted_step"),
+        cfg.get("checkpoint_step"),
+        cfg.get("step"),
+    ]:
+        step = to_int(value)
+        if step is not None:
+            return step
+
+    for value in [
+        metadata.get("checkpoint"),
+        cfg.get("checkpoint"),
+        metadata.get("id"),
+        metadata.get("method"),
+        exp.name,
+    ]:
+        step = step_from_text(value)
+        if step is not None:
+            return step
+
+    text = f"{exp.name} {metadata.get('method', '')}".lower()
+    steps = metadata_generated_eval_steps(metadata)
+    if steps and ("final" in text or "current" in text):
+        return max(steps)
+    return None
+
+
+def available_step_numbers(exp: Experiment) -> list[int]:
+    steps: list[int] = []
+    steps.extend(metadata_generated_eval_steps(exp.metadata or {}))
+    for df in exp.frames.values():
+        if not len(df) or "step" not in df.columns:
+            continue
+        for value in df["step"].tolist():
+            step = to_int(value)
+            if step is not None:
+                steps.append(step)
+    return sorted(set(steps))
+
+
+def total_steps(exp: Experiment) -> int | None:
+    metadata = exp.metadata or {}
+    cfg = exp.run_config or {}
+    for value in [
+        metadata.get("total_steps"),
+        metadata.get("max_steps"),
+        cfg.get("total_steps"),
+        cfg.get("max_steps"),
+    ]:
+        step = to_int(value)
+        if step is not None:
+            return step
+    steps = available_step_numbers(exp)
+    return max(steps) if steps else None
+
+
+def submitted_step_label(exp: Experiment) -> str:
+    step = submitted_step(exp)
+    if step is None:
+        return "final" if is_kaggle_submitted_experiment(exp) else ""
+    total = total_steps(exp)
+    if total is not None:
+        if step == total:
+            return f"{step} (final)"
+        return f"{step}/{total}"
+    return str(step)
+
+
+def filter_to_submitted_step(exp: Experiment, df: pd.DataFrame) -> pd.DataFrame:
+    step = submitted_step(exp)
+    if step is None or "step" not in df.columns or not len(df):
+        return df
+    numeric_steps = pd.to_numeric(df["step"], errors="coerce")
+    filtered = df[numeric_steps == step].copy()
+    return filtered if len(filtered) else df
 
 
 def read_artifacts_from_zip(path: Path) -> tuple[dict[str, Any], dict[str, pd.DataFrame], set[str]]:
@@ -296,12 +416,24 @@ def load_run_bundle_experiment(path: Path) -> Experiment:
     )
 
 
+def experiment_order_key(exp: Experiment) -> tuple[str, str]:
+    metadata = exp.metadata or {}
+    for key in ["created_at", "archived_at", "archive_date", "submitted_at", "scored_at"]:
+        value = metadata.get(key)
+        if value:
+            return str(value), exp.path.name
+    return exp.path.name, exp.name
+
+
 def discover_experiments(output_root: Path) -> list[Experiment]:
     experiments: list[Experiment] = []
     submissions_dir = output_root / "submissions"
     if submissions_dir.exists():
-        for path in sorted(p for p in submissions_dir.iterdir() if p.is_dir()):
-            experiments.append(load_submission_experiment(path))
+        submission_experiments = [
+            load_submission_experiment(path)
+            for path in sorted(p for p in submissions_dir.iterdir() if p.is_dir())
+        ]
+        experiments.extend(sorted(submission_experiments, key=experiment_order_key))
 
     run_roots = [output_root / "experiments", output_root / "runs"]
     for root in run_roots:
@@ -321,7 +453,8 @@ def discover_experiments(output_root: Path) -> list[Experiment]:
 def html_table(df: pd.DataFrame, max_rows: int = 30) -> str:
     if df is None or not len(df):
         return '<p class="muted">No rows.</p>'
-    view = df.head(max_rows).copy()
+    view = df.head(max_rows).copy().astype(object)
+    view = view.where(pd.notna(view), "")
     return view.to_html(index=False, escape=True, classes="dataframe")
 
 
@@ -487,31 +620,74 @@ def generated_eval_frame(exp: Experiment) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     combined = pd.concat(frames, ignore_index=True)
+    if "accuracy" not in combined.columns:
+        combined["accuracy"] = pd.NA
+    for source_col in ["exact_accuracy", "generated_eval_accuracy", "match_rate"]:
+        if source_col in combined.columns:
+            missing = combined["accuracy"].isna() | combined["accuracy"].astype(str).str.strip().eq("")
+            combined.loc[missing, "accuracy"] = combined.loc[missing, source_col]
+    if {"exact_matches", "rows"}.issubset(combined.columns):
+        missing = combined["accuracy"].isna() | combined["accuracy"].astype(str).str.strip().eq("")
+        matches = pd.to_numeric(combined.loc[missing, "exact_matches"], errors="coerce")
+        row_counts = pd.to_numeric(combined.loc[missing, "rows"], errors="coerce")
+        computed = matches / row_counts
+        combined.loc[missing, "accuracy"] = computed
     if "family" in combined.columns:
-        combined["family"] = combined["family"].fillna("all").astype(str)
+        combined["family"] = combined["family"].fillna("all").map(normalize_family)
     dedupe_cols = [col for col in ["step", "family"] if col in combined.columns]
     if len(dedupe_cols) == 2:
         combined = combined.drop_duplicates(subset=dedupe_cols, keep="first")
-    return combined
+    return filter_to_submitted_step(exp, combined)
 
 
 def overview_table(experiments: list[Experiment]) -> pd.DataFrame:
     rows = []
     for exp in experiments:
         cfg = exp.run_config
+        method_text = str(exp.metadata.get("method", ""))
+        description_text = str(exp.metadata.get("kaggle_description", ""))
+        target = cfg.get("train_target_format") or exp.metadata.get("train_target_format")
+        if not target and "trace" in f"{method_text} {description_text}".lower():
+            target = "trace_column_boxed"
+        adapter = exp.metadata.get("adapter_config", {}) if isinstance(exp.metadata.get("adapter_config"), dict) else {}
+        modules = cfg.get("lora_target_modules") or adapter.get("target_modules")
+        if isinstance(modules, list):
+            modules_text = "|".join(str(item) for item in modules)
+        else:
+            modules_text = modules
         rows.append(
             {
                 "experiment": exp.name,
                 "score": exp.score_public,
+                "submitted_to_kaggle": is_kaggle_submitted_experiment(exp),
+                "status": exp.metadata.get("status"),
+                "submitted_step": submitted_step_label(exp),
                 "source": exp.source,
-                "target": cfg.get("train_target_format"),
-                "lora_r": cfg.get("lora_r"),
-                "lora_modules": "|".join(cfg.get("lora_target_modules", [])) if isinstance(cfg.get("lora_target_modules"), list) else cfg.get("lora_target_modules"),
+                "target": target,
+                "lora_r": cfg.get("lora_r", adapter.get("r")),
+                "lora_alpha": cfg.get("lora_alpha", adapter.get("lora_alpha")),
+                "lora_dropout": cfg.get("lora_dropout", adapter.get("lora_dropout")),
+                "lora_modules": modules_text,
                 "max_new": cfg.get("max_new_tokens"),
-                "train_rows": cfg.get("train_rows_actual", cfg.get("train_rows")),
+                "learning_rate": cfg.get("learning_rate", exp.metadata.get("learning_rate")),
+                "train_rows": cfg.get("train_rows_actual", cfg.get("train_rows", exp.metadata.get("train_rows_actual"))),
             }
         )
     return pd.DataFrame(rows)
+
+
+def is_kaggle_submitted_experiment(exp: Experiment) -> bool:
+    """Return True only for runs that were uploaded to Kaggle or are scored."""
+    metadata = exp.metadata or {}
+    status = str(metadata.get("status", "")).strip().lower()
+    submitted_flag = metadata.get("submitted_to_kaggle")
+    if normalize_bool(submitted_flag):
+        return True
+    if to_number(exp.score_public) is not None:
+        return True
+    if status in {"submitted", "pending_score", "scored"}:
+        return True
+    return False
 
 
 def test_reference_table() -> pd.DataFrame:
@@ -586,8 +762,18 @@ def sanity_comparison_table(experiments: list[Experiment]) -> pd.DataFrame:
 
 def experiment_code(exp: Experiment) -> str:
     text = f"{exp.name} {exp.method or ''}".lower()
+    if "exp06_mamba_fused" in text or "fused-mamba" in text:
+        return "06-mamba"
+    if "exp05_trace_occam" in text or "trace occam" in text:
+        step = submitted_step(exp)
+        return f"05-trace-step-{step}" if step is not None else "05-trace"
     if "s4" in text or "attention_expand" in text:
-        return "04-s4"
+        step = submitted_step(exp)
+        if step == 144:
+            return "04-s4-step-144"
+        if step == 193 or "final" in text:
+            return "04-s4-final"
+        return f"04-s4-step-{step}" if step is not None else "04-s4"
     if "raw_full" in text or "active_02" in text:
         return "02-raw-full"
     if "nemotron_lora_score_0_62" in text or exp.score_public == 0.62:
@@ -628,16 +814,23 @@ def run_legend_table(experiments: list[Experiment]) -> pd.DataFrame:
     rows = []
     for exp in experiments:
         cfg = exp.run_config
-        modules = cfg.get("lora_target_modules")
+        method_text = str(exp.metadata.get("method", ""))
+        description_text = str(exp.metadata.get("kaggle_description", ""))
+        target = cfg.get("train_target_format") or exp.metadata.get("train_target_format")
+        if not target and "trace" in f"{method_text} {description_text}".lower():
+            target = "trace_column_boxed"
+        adapter = exp.metadata.get("adapter_config", {}) if isinstance(exp.metadata.get("adapter_config"), dict) else {}
+        modules = cfg.get("lora_target_modules") or adapter.get("target_modules")
         if isinstance(modules, list):
             modules_text = "/".join(str(item) for item in modules)
         else:
             modules_text = str(modules or "")
+        lora_r = cfg.get("lora_r", adapter.get("r", ""))
         rows.append(
             {
                 "label": experiment_code(exp),
                 "score": exp.score_public,
-                "main": f"{cfg.get('train_target_format', '')}, r={cfg.get('lora_r', '')}, max_new={cfg.get('max_new_tokens', '')}, {modules_text}",
+                "main": f"{target or ''}, r={lora_r}, max_new={cfg.get('max_new_tokens', '')}, {modules_text}",
             }
         )
     return pd.DataFrame(rows)
@@ -712,6 +905,25 @@ def comparison_loss(experiments: list[Experiment]) -> tuple[list[str], list[tupl
         df = exp.frames.get("trainer_log", pd.DataFrame())
         if not len(df):
             continue
+        selected_step = submitted_step(exp)
+        if selected_step is not None:
+            label = experiment_code(exp)
+            loss = value_at_step(df, "loss", selected_step)
+            if loss is None:
+                loss = value_at_step(df, "train_loss", selected_step)
+            eval_loss = value_at_step(df, "eval_loss", selected_step)
+            if loss is None:
+                loss = latest_value(df, ["train_loss", "loss"])
+            if eval_loss is None:
+                eval_loss = latest_value(df, ["eval_loss"])
+            if loss is None and eval_loss is None:
+                continue
+            add_unique(labels, label)
+            if loss is not None:
+                train[label] = loss
+            if eval_loss is not None:
+                evals[label] = eval_loss
+            continue
         checkpoint_steps = generated_eval_steps(exp)
         if len(checkpoint_steps) > 1:
             for step in checkpoint_steps:
@@ -768,8 +980,12 @@ def comparison_probe(experiments: list[Experiment]) -> tuple[list[str], list[tup
         work["phase_priority"] = work["phase"].astype(str).map(phase_priority).fillna(5) if "phase" in work.columns else 5
         work = work.sort_values(["step", "phase_priority"]).drop_duplicates(subset=["step"], keep="first")
 
+        selected_step = submitted_step(exp)
         checkpoint_steps = generated_eval_steps(exp)
-        if len(checkpoint_steps) > 1:
+        if selected_step is not None:
+            wanted_steps = [selected_step]
+            include_step_in_label = False
+        elif len(checkpoint_steps) > 1:
             wanted_steps = checkpoint_steps
             include_step_in_label = True
         else:
@@ -985,6 +1201,7 @@ function makeBarOptions(config) {
         "</head><body>",
         "<h1>Nemotron Experiment Dashboard</h1>",
         f"<p class='muted'>Source root: {escape(str(output_root))}</p>",
+        "<p class='muted'>Public-score charts use Kaggle scores when present. Local diagnostic charts use every run with saved metrics, including pending submissions.</p>",
         "<section><h2>Overview</h2>",
         html_table(overview, max_rows=100),
         "<h3>Run Legend</h3>",

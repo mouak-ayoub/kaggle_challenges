@@ -1,6 +1,6 @@
 # Important Errors
 
-Last updated: 2026-05-16
+Last updated: 2026-05-25
 
 This file records non-trivial errors we hit so the next session does not rediscover them.
 
@@ -89,6 +89,10 @@ Lesson:
 
 For 4-bit Nemotron training, avoid the fused path by not installing `causal-conv1d` in the training notebook. Installing `mamba-ssm` alone is okay. The warning that the fast path is unavailable is acceptable here.
 
+Update on 2026-05-25:
+
+Notebook `04` is now the explicit fused-Mamba BF16 test path: install `causal-conv1d`, load the base without 4-bit quantization, keep LoRA off `mixer.in_proj/out_proj`, and audit those projection modules before `trainer.train()`. Notebook `03` remains the practical 4-bit path and should continue to avoid the fused training kernel.
+
 ## Generation `cache_position` Error
 
 Symptom:
@@ -116,6 +120,35 @@ and also set:
 model.config.use_cache = False
 model.generation_config.use_cache = False
 ```
+
+## Batched Decoder-Only Generation With Right Padding
+
+Symptom:
+
+After changing generation from row-by-row to batched prompts, shorter rows produced empty one-token outputs while the longest row generated normally. Transformers also warned:
+
+```text
+A decoder-only architecture is being used, but right-padding was detected.
+```
+
+Cause:
+
+The tokenizer was right-padding a decoder-only model, and `pad_token_id` was the same as `eos_token_id`. For shorter prompts, the model saw EOS/pad tokens at the right edge where generation begins.
+
+Lesson:
+
+For batched decoder-only generation, temporarily set:
+
+```python
+previous_padding_side = tokenizer.padding_side
+tokenizer.padding_side = "left"
+try:
+    inputs = tokenizer(prompts, padding=True, return_tensors="pt", ...)
+finally:
+    tokenizer.padding_side = previous_padding_side
+```
+
+This issue does not appear in nonbatched row-by-row generation because no padding is added.
 
 ## BF16 MoE `index_add_` Dtype Mismatch
 
@@ -158,7 +191,7 @@ Lesson:
 
 FP32 is a debugging workaround, not the desired training precision. Prefer BF16 on A100/H100 if the MoE dtype mismatch is fixed or avoided.
 
-## PEFT `load_adapter` Fails On Nemotron Checkpoint Eval
+## PEFT `load_adapter` Fails On Nemotron Checkpoint Eval Or Trainer Resume
 
 Symptom:
 
@@ -168,11 +201,13 @@ TypeError: WeightConverter.__init__() got an unexpected keyword argument 'distri
 
 Cause:
 
-In the Colab PEFT/Transformers stack, calling `current_model.load_adapter(...)` on the already wrapped Nemotron PEFT model can hit a conversion-mapping incompatibility while loading saved LoRA checkpoints.
+In the Colab PEFT/Transformers stack, calling `current_model.load_adapter(...)` on the already wrapped Nemotron PEFT model can hit a conversion-mapping incompatibility while loading saved LoRA checkpoints. The same issue can occur inside `trainer.train(resume_from_checkpoint=...)`, because Trainer calls PEFT `model.load_adapter(...)` before loading the trainer state.
 
 Lesson:
 
 Do not rerun an expensive completed eval if the failure happens after predictions were appended in notebook memory. First save the partial `all_predictions` / `all_summaries` result. For checkpoint comparison, avoid `load_adapter` and directly load `adapter_model.safetensors` into the existing active LoRA adapter by mapping saved keys like `.lora_A.weight` to the in-memory keys like `.lora_A.default.weight`.
+
+For training resume, load `adapter_model.safetensors` directly into `trainer.model`, then temporarily monkeypatch `trainer._load_from_checkpoint` to no-op so Trainer skips only the broken PEFT model-loading call. Still call `trainer.train(resume_from_checkpoint=...)` so `trainer_state.json`, optimizer, scheduler, and RNG state can resume from the checkpoint.
 
 ## Naive Mamba Path OOM At Long Sequence Length
 
@@ -345,3 +380,17 @@ The Colab runtime is not in a clean GPU Torch state, usually after running insta
 Lesson:
 
 Restart or factory-reset the Colab runtime, select a GPU runtime before running installs, and verify `import torch`, `torch.cuda.is_available()`, and BF16 support before any heavy package installs. Do not install or upgrade `torch` inside the Nemotron notebooks unless there is a concrete reason.
+
+## Full Generated Eval Can Dominate Fast Mamba Runs
+
+Symptom:
+
+The fast BF16 fused-Mamba training path finished training quickly, but final generated-answer eval over the full 256-row fixed split was interrupted by `KeyboardInterrupt` during generation. The five-row final probe showed average generation around 21 seconds per row, so a full eval could take close to an hour or more.
+
+Cause:
+
+Training speed and autoregressive generation speed are different bottlenecks. Long `MAX_NEW_TOKENS` settings and verbose traces can make generated eval much slower than the training loop, especially when sampling one row at a time.
+
+Lesson:
+
+For fast Mamba experiments, default checkpoint/final generated eval to a smaller fixed sample such as 64 rows, then run the full 256-row eval only for a candidate that passes the smaller family-level gate. Keep raw completions and family summaries so a short eval remains diagnostic rather than only a scalar.

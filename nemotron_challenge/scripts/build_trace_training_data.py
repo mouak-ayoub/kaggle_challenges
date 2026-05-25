@@ -2,9 +2,9 @@
 
 The input schema is intentionally small:
 
-- data/input/train.csv: id, question, gold_answer
-- data/input/test.csv: id, question
-- data/input/trace_training.csv: id, question, trace, gold_answer
+- data/input/official/train.csv: id, question, gold_answer
+- data/input/official/test.csv: id, question
+- data/input/traces/trace_training.csv: id, question, trace, gold_answer
 """
 
 from __future__ import annotations
@@ -682,12 +682,12 @@ def write_csv(path: Path, rows: list[dict[str, str]], fieldnames: list[str] | No
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train-csv", type=Path, default=Path("data/input/train.csv"))
-    parser.add_argument("--trace-csv", type=Path, default=Path("data/input/trace_training.csv"))
+    parser.add_argument("--train-csv", type=Path, default=Path("data/input/official/train.csv"))
+    parser.add_argument("--trace-csv", type=Path, default=Path("data/input/traces/trace_training.csv"))
     parser.add_argument(
         "--bit-audit-csv",
         type=Path,
-        default=Path("data/input/bit_candidate_trace_audit.csv"),
+        default=Path("data/input/verifier/bit_candidate_trace_audit.csv"),
         help="Optional audit CSV with verified bit-manipulation DSL rules.",
     )
     args = parser.parse_args()

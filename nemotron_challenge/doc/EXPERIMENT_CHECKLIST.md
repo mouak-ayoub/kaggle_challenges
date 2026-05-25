@@ -13,15 +13,19 @@ Use this as the submission planning board. After each Kaggle score, copy the sub
 
 ## Resume Here
 
-Last recorded project result was `2026-05-18`; today is `2026-05-24`, so this is a 6-day return. Start here before reading the lower historical notes.
+Latest local preparation is `2026-05-25`. Start here before reading the lower historical notes.
 
 | Current answer | Detail |
 | --- | --- |
 | Best public baseline | `00-raw-1024`, score about `0.62`. |
 | Recent S4 result | S4 final scored `0.53`; S4 checkpoint-144 scored `0.55`. Checkpoint timing helped a little but did not rescue S4. |
-| Current conclusion | Stop S4-style final-answer boxed SFT as the main path. |
-| Next active task | Integrate `data/input/trace_training.csv` into the next trace-training notebook, then evaluate with `eval_v2_grouped_family_balanced` before trusting a submission. |
-| After that | Use `eval_v2` to support solver-guided STaR seed data, starting with verifier-friendly families. |
+| Recent exp05 result | Trace Occam checkpoint 144 scored `0.59`, slightly above checkpoint 96 at `0.58`; both have the same local generated eval (`134/256`). |
+| Recent exp06 result | `exp06_mamba_fused_bf16_attention_r4_trace_v2` scored `0.58` on Kaggle. Local generated eval was poor (`36/256`), so treat it as a fast-path diagnostic, not a strong method. |
+| Recent exp09 result | `exp09_mamba_cipher_v3_synth2500_b20_ep3` finished locally and is rejected: generated eval `0/64`, cipher `0/64`, and `63/64` max-token hits. |
+| Current conclusion | Trace supervision improved over the S4 boxed path but still did not beat the `0.62` raw partial baseline. Long per-position cipher citation traces train template imitation and can destroy generation. The next cipher attempt should preserve the base model's natural alignment style while being short enough to finish. |
+| Next active task | Run `exp10_mamba_cipher_v4_natural2500_b20_ep3` from notebook `notebooks/08_colab_mamba_cipher_v4_natural_train_and_submit.ipynb`, or first inspect a few v4 rows manually. |
+| Current input file | `data/input/traces/trace_cipher_v4_natural2500.csv`: 2,500 compact natural-alignment cipher traces generated from the exp09 augmented prompts. |
+| After that | Use generated eval and raw completions to check whether the model reaches `Final answer` without max-token hits before any Kaggle submission. |
 | Do not resume from | The lower legacy S0-S7 checklist. It is historical context, not the active continuation path. |
 
 ## Current Rule
@@ -60,6 +64,61 @@ These signals are filters, not a leaderboard proxy. A run can look good locally 
 
 ## Near-Term Research Plan
 
+- [ ] `exp06_fix_trace_v2_2500_ep2_r4_inout` `NEXT` `RISK`
+  - Purpose: test whether fixing trace quality for the hard families helps more than simply adding generic traces.
+  - Input: `data/input/traces/trace_training_v2_2500.csv`, built by `scripts/build_trace_training_v2_2500.py`.
+  - Data mix: 600 strict cipher traces where every target character cites an aligned example pair; 900 verified bit-manipulation DSL traces with explicit 8-bit execution; 250 boxed-only equation rows; 250 compact unit rows; 250 compact gravity rows; 250 boxed-only numeral rows.
+  - Key config: same as exp05 except two epochs for the smaller 2,500-row curriculum: LoRA `r=4`, alpha `32`, dropout `0.05`, `in_proj/out_proj`, max seq `512`, max new `384`, LR `1e-4`, completion-only loss, 2 epochs.
+  - Submit gate: choose by checkpoint, not final step blindly. Cipher must improve from `0/40`, bit must improve from `3/44`, easy families should not collapse, and extraction/max-token failures should stay controlled.
+
+- [x] `exp06_mamba_fused_bf16_attention_r4_trace_v2` `RISK`
+  - Purpose: test the same strict v2 trace file with fused Mamba enabled and dense BF16 base weights, using attention-only LoRA targets.
+  - Input: `data/input/traces/trace_training_v2_2500.csv`; split is 2,244 train rows and 256 eval rows.
+  - Key config: `USE_4BIT=False`, fused `mamba-ssm causal-conv1d`, LoRA `r=4`, alpha `32`, dropout `0.1`, targets `q_proj/k_proj/v_proj/o_proj`, batch `16`, grad accumulation `4`, max seq `512`, max new `384`, LR `1e-4`, completion-only loss, 2 epochs.
+  - Training signal from Colab: Mamba projection audit passed with dense BF16 `mixer.in_proj/out_proj` and no accidental LoRA on Mamba projections; LoRA audit found real attention adapters with `466,944` trainable parameters on `q_proj/k_proj/v_proj/o_proj`; training reached step `72/72`.
+  - Final probe signal: `1/5` on the five-row probe at step 72. Gravity matched; unit conversion invented an incorrect rule, cipher skipped the cited-map template and guessed a phrase, bit manipulation generated a long but wrong execution trace, and equation remained wrong.
+  - Final generated eval from downloaded run bundle: `36/256 = 0.140625`; bit `2/91`, cipher `0/65`, equation `1/30`, gravity `4/25`, numeral `11/15`, unit conversion `18/30`; `13` max-token hits and no empty answers.
+  - Archive: `data/outputs/submissions/2026-05-25_exp06_mamba_fused_bf16_attention_r4_trace_v2_submitted_pending/`. A strict `submission.zip` was submitted to Kaggle; public score is pending.
+  - Interpretation: technically valid and fast, but behaviorally failed locally. Treat the upload as information gathering, not a serious candidate. The attention-only BF16 Mamba path learned the trace text under teacher forcing while damaging generated-answer behavior.
+
+- [ ] `exp08_cipher_only_v3_position_trace` `NEXT` `RISK`
+  - Purpose: isolate whether cipher can be taught by position-level aligned evidence, after the Mamba probe showed the model skipped the cited-map behavior and guessed a phrase.
+  - Input: `data/input/traces/trace_training_v3_cipher_only.csv`, built by `scripts/build_trace_training_v3_cipher_only.py`.
+  - Notebook: `notebooks/06_colab_cipher_only_trace_train_and_submit.ipynb`.
+  - Data mix: 605 cipher rows only; every row has full target-character support from aligned example pairs. The other 970 cipher rows are excluded because at least one final-answer character is unsupported by examples.
+  - Trace policy: one target word at a time, one character position at a time, with source word pair and source character position cited before assembling the plaintext word.
+  - Notebook config: `EVAL_ROWS=64`, LoRA `r=4`, `in_proj/out_proj`, LR `1e-4`, max seq `1024`, max new `512`, 3 epochs. Treat this as a cipher-learning probe, not a balanced leaderboard candidate.
+  - Submit gate: submit only if cipher generated eval meaningfully improves; this run may hurt non-cipher families because it contains no rehearsal.
+
+- [x] `exp09_mamba_cipher_v3_synth2500_b20_ep3` `RISK`
+  - Purpose: test augmented cipher-only position traces at 2,500 rows using the fast dense-BF16 fused-Mamba path.
+  - Input: `data/input/traces/trace_cipher_v3_synth2500.csv`, renamed from `trace_training_v3_cipher_only_2500_synth_existing_prompts.csv`.
+  - Data audit: 2,500 rows; columns `id/question/trace/gold_answer`; all rows infer as cipher; unique IDs; every trace starts with `Thinking:\nCategory: cipher.`; exactly one boxed final answer; zero boxed/gold mismatches; zero unsupported target-character rows under the aligned-example verifier; no non-ASCII traces.
+  - Notebook: `notebooks/07_colab_mamba_cipher_synth_train_and_submit.ipynb`.
+  - Key config: `USE_4BIT=False`, fused Mamba, LoRA `r=4`, targets `q_proj/k_proj/v_proj/o_proj`, batch `20`, grad accumulation `4`, epochs `3`, LR `1e-4`, max seq `512`, max new `384`, final generated eval enabled, checkpoint generated eval disabled.
+  - Callback policy: only lightweight `TrainerLogFlushCallback.on_log` is registered. The `GenerationCallback` with `on_log`/`on_save` generation is not registered, so training should not pause for probe/checkpoint generation.
+  - In-flight signal from Colab: split is `2,436` train rows and `64` eval rows. Adapter audit found `24` LoRA modules on `q_proj/k_proj/v_proj/o_proj` across layers `5,12,19,26,33,42`, with `466,944` trainable parameters (`0.0015%`). Completion-only mask starts at `Thinking:\nCategory: cipher.`. Through step `33/93`, loss and token accuracy are improving: train loss `3.7269 -> 2.9216 -> 2.0024`, validation loss `0.8091 -> 0.6056 -> 0.4055`, entropy `0.7544 -> 0.6911 -> 0.5306`, mean token accuracy `0.8280 -> 0.8552 -> 0.8811`.
+  - Probe-evolution signal after training: the only downloaded probe row (`d300a576`) failed both before and after training. Both outputs hit `384/384` generated tokens. Before training, the model reasoned naturally over example word alignments but did not reach the target. After training, it followed the position-citation template and started from the target phrase, but produced invalid source citations and still did not reach a boxed final answer.
+  - Final generated-eval signal: `0/64 = 0.0`, all cipher, with `63/64` max-token hits and average `382.8/384` generated tokens. Public sanity outputs also maxed out and repeated the cipher template even on non-cipher binary rows.
+  - Archive: `data/outputs/submissions/2026-05-25_exp09_mamba_cipher_v3_synth2500_b20_ep3_local_rejected/`. A strict `submission.zip` was built for completeness but this adapter is not recommended for Kaggle submission.
+  - Conclusion: teacher-forced loss was excellent, but generation failed. The long position-citation template is too verbose and too easy to imitate without real verification. Next cipher traces should be shorter, target-only, and closer to natural alignment reasoning.
+
+- [ ] `exp10_mamba_cipher_v4_natural2500_b20_ep3` `NEXT` `RISK`
+  - Purpose: test whether the base model's natural cipher reasoning style can be lightly reinforced without the long v3 position-citation failure.
+  - Input: `data/input/traces/trace_cipher_v4_natural2500.csv`, built by `scripts/build_trace_training_v4_cipher_natural.py` from the same 2,500 augmented cipher prompts as exp09.
+  - Notebook: `notebooks/08_colab_mamba_cipher_v4_natural_train_and_submit.ipynb`.
+  - Trace policy: mimic the before-training probe pattern closely: `We need to find mapping from cipher to plaintext. Given examples:`, then `Cipher: ... -> plaintext: ...`, then `Let's align words. Cipher words... Plain words...`, then `So mapping per word? Let's map letters.`, one fully walked example, a short note that other examples add consistency checks, target application, and one boxed final answer. It removes position citations and `Thinking:/Category:` boilerplate.
+  - Data audit: 2,500 rows; unique IDs/questions/traces; zero boxed/gold mismatches; zero missing boxed answers; zero non-ASCII traces; zero leftover `pos` or `source position` language. Trace length averages about `1,912` characters, still below the worst v3 rows while preserving the model-native pattern.
+  - Key config: fast dense-BF16 fused-Mamba setup with longer context for the longer v4 trace: LoRA `r=4`, targets `q_proj/k_proj/v_proj/o_proj`, batch `12`, grad accumulation `7`, epochs `3`, LR `1e-4`, max seq `1024`, max new `384`, final generated eval enabled, checkpoint generated eval disabled.
+  - Submit gate: generated cipher eval must be nonzero, max-token hits must drop sharply versus `63/64`, and sanity `00189f6a` must reach a boxed answer instead of looping.
+
+- [ ] `exp07_trace_v2_all_hard_p25` `RISK`
+  - Purpose: train on every hard-family row while keeping a small/medium rehearsal slice from easy families.
+  - Input: `data/input/traces/trace_training_v2_all_hard_p25.csv`, built by `scripts/build_trace_training_v2_all_hard.py`.
+  - Data mix: all cipher rows (`1,575`), all bit-manipulation rows (`1,600`), all equation rows (`1,555`), plus about 25% each of gravity (`399`), numeral (`394`), and unit conversion (`398`), for `5,921` rows total.
+  - Trace policy: strict cited-map traces for 605 cipher rows and boxed-only for 970 unsupported cipher rows; verified bit execution traces for 942 bit rows and boxed-only for 658 unverified bit rows; all equation rows boxed-only; compact unit/gravity traces; numeral boxed-only.
+  - Risk: many hard rows are boxed-only, so this tests hard-family exposure and rehearsal more than complete procedural supervision. Do not interpret lower loss as hard-family reasoning unless generated eval improves cipher/bit/equation.
+
 - [ ] `eval_v2_grouped_family_balanced` `NEXT`
   - Purpose: replace the current 256-row generated eval as the main local diagnostic.
   - Design: 1,000-2,000 rows if runtime allows, family-balanced, grouped by prompt/rule pattern where feasible, with overall accuracy, hard-family accuracy excluding numeral, per-family accuracy, extraction failures, max-token hits, and raw completions.
@@ -68,7 +127,7 @@ These signals are filters, not a leaderboard proxy. A run can look good locally 
 
 - [ ] `exp05_star_seed_512` `NEXT` `RISK`
   - Hypothesis: a small set of compact verified reasoning traces can teach procedure without damaging the base model behavior that gave the `0.62` public score.
-  - Method: start from `data/input/trace_training.csv`; use original questions with target-side cipher character-position traces plus boxed answers, with non-cipher rows boxed-only unless a family-specific trace exists.
+  - Method: start from `data/input/traces/trace_training.csv`; use original questions with target-side cipher character-position traces plus boxed answers, with non-cipher rows boxed-only unless a family-specific trace exists.
   - Key config candidate: LoRA `r=8`, targets `in_proj/out_proj/q_proj/k_proj/v_proj/o_proj`, LR `1e-4`, 1 epoch, max seq `2048` if memory allows.
   - Success signal: `eval_v2` hard-family accuracy improves and public score stays near or above `0.62`.
 
@@ -85,6 +144,9 @@ These signals are filters, not a leaderboard proxy. A run can look good locally 
 | [x] | `ACTIVE_02_raw_full_r4` | `0.54` scored | Full official data improves the known raw-answer baseline without changing prompt/format behavior. | Raw target, direct prompt, full train minus 256 eval rows, LoRA `r=4`/alpha `32`, `in_proj/out_proj`, seq `512`, max new `64`, effective batch `48`, LR `3e-4`, 1 epoch. | Eval loss improved to about `0.7933`, but probe stayed about `1/5`; public score dropped below the `0.62` partial baseline. Full-data raw final-answer SFT is not sufficient. | Archive: `data/outputs/submissions/2026-05-17_colab_raw_full_r4_score_0_54/`. |
 | [ ] | `ACTIVE_03_private_reasoning_boxed_r8` | Interrupted / artifacts likely lost | Private-reasoning prompt plus boxed targets improves final-answer discipline and gives rank 8 enough capacity to learn transformations. | Boxed target, private-reasoning boxed prompt, LoRA `r=8`/alpha `64`, `in_proj/out_proj`, seq `512`, full data, 256 eval rows, LR `3e-4`, 1 epoch. | Runtime-local artifacts appear lost after Colab disconnect unless a Drive/manual download copy exists. This run also combines rank and output-format changes, so it is hard to interpret. | Recover only if a Drive/manual copy exists; otherwise do not revive as a priority. |
 | [x] | `ACTIVE_04_S4_attention_expand_r8_private_boxed_max128` | Final `0.53`; checkpoint-144 `0.55` | Expanded attention LoRA improves transformation learning while keeping private-reasoning boxed setup. | Boxed target, private-reasoning boxed prompt, LoRA `r=8`/alpha `64`, `in_proj/out_proj/q_proj/k_proj/v_proj/o_proj`, seq `512`, max new `128`, effective batch `48`, LR `3e-4`, 1 epoch. | Final step 193 had best local generated eval `95/256 = 0.371094` but scored `0.53`; checkpoint-144 had lower local generated eval `90/256 = 0.351562` but scored `0.55`. Checkpoint timing matters, but S4 still did not beat the `0.62` raw baseline. | Archives: `data/outputs/submissions/2026-05-17_colab_s4_attention_boxed_r8_final_score_0_53/`, `data/outputs/submissions/2026-05-17_colab_s4_checkpoint144_score_0_55/`. Shift to `eval_v2` and solver-guided STaR unless checkpoint 192 has a strong new signal. |
+| [x] | `exp05_trace_occam_r4_inout` checkpoint 96 | `0.58` scored | Canonical verified trace targets plus completion-only loss can improve hard-family procedure without expanded attention LoRA. | Trace/boxed target column, original questions, LoRA `r=4`/alpha `32`/dropout `0.05`, `in_proj/out_proj`, seq `512`, max new `384`, LR `1e-4`, Mamba generation backfill. | Local generated eval `134/256 = 0.5234375`, probe `3/5`, public score `0.58`. Better than raw-full and S4, still below `00-raw-1024` at about `0.62`. Strong unit/gravity/numeral; cipher `0/40`, bit/equation weak. | Archive: `data/outputs/submissions/2026-05-25_exp05_trace_occam_checkpoint96_mamba_score_0_58/`. |
+| [x] | `exp05_trace_occam_r4_inout` checkpoint 144 | `0.59` scored | Later checkpoint might benefit from lower train/eval loss while preserving the trace behavior from checkpoint 96. | Same as checkpoint 96; selected checkpoint step 144. | Public score improved from checkpoint 96's `0.58` to `0.59`, despite unchanged local generated eval at `134/256 = 0.5234375`. Only two local eval rows changed versus checkpoint 96: one numeral gain and one bit-manipulation loss. Still below `00-raw-1024` at about `0.62`. | Archive: `data/outputs/submissions/2026-05-25_exp05_trace_occam_checkpoint144_mamba_score_0_59/`. |
+| [x] | `exp06_mamba_fused_bf16_attention_r4_trace_v2` | `0.58` scored | Fast dense-BF16 fused-Mamba attention LoRA might provide a cheaper training/eval path for v2 trace data. | Trace v2 2,500-row curriculum, dense BF16 fused Mamba, LoRA `r=4` on `q_proj/k_proj/v_proj/o_proj`, batch `16`, grad accumulation `4`, LR `1e-4`, 2 epochs. | Public score returned `0.58`, near exp05 checkpoint96, despite weak local generated eval `36/256 = 0.140625` and cipher `0/65`. It is useful as a runtime-path diagnostic, not as a model-quality win. | Archive: `data/outputs/submissions/2026-05-25_exp06_mamba_fused_bf16_attention_r4_trace_v2_submitted_pending/`; metadata status is now scored. |
 
 ## Runtime Recovery Rule
 

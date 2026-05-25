@@ -4,6 +4,8 @@ This repository is for a gradual Kaggle workflow around the NVIDIA Nemotron Mode
 
 The project has moved past bootstrap into Colab LoRA experiments. The current focus is keeping the training and artifact workflow simple enough to trust while testing better supervision methods such as short traces and STaR-like bootstrapping.
 
+Latest tracked result: `exp05_trace_occam_r4_inout` checkpoint 144 scored `0.59` on Kaggle, slightly above checkpoint 96 at `0.58` with the same local generated eval (`134/256`). The best known public baseline remains the earlier `00-raw-1024` run at about `0.62`.
+
 ## Current Milestone
 
 Current milestone:
@@ -72,7 +74,9 @@ Planned layout:
 
 - `config/`: small YAML configuration files
 - `data/`: local inputs, generated outputs, and external reference pulls, ignored by git
-- `data/input/`: the three active challenge input files: `train.csv`, `test.csv`, and `trace_training.csv`
+- `data/input/official/`: official Kaggle files such as `train.csv` and `test.csv`
+- `data/input/traces/`: trainable trace CSVs such as `trace_training.csv` and experiment-specific trace datasets
+- `data/input/verifier/`: local verifier/builder dependencies such as `bit_candidate_trace_audit.csv`
 - `data/outputs/`: local run diagnostics, submission archives, and reports
 - `data/reference/`: local external references such as pulled Kaggle notebooks
 - `doc/`: project memory, decisions, and important error notes

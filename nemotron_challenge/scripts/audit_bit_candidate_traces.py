@@ -271,12 +271,12 @@ def main() -> None:
         "--candidate-csv",
         type=Path,
         required=True,
-        help="Candidate trace CSV to audit. This is not part of the canonical data/input set.",
+        help="Candidate trace CSV to audit. This is not part of the canonical data/input/traces set.",
     )
     parser.add_argument(
         "--audit-csv",
         type=Path,
-        default=Path("data/input/bit_candidate_trace_audit.csv"),
+        default=Path("data/input/verifier/bit_candidate_trace_audit.csv"),
     )
     args = parser.parse_args()
 

@@ -2,9 +2,11 @@
 
 Date: 2026-05-17
 
+Update 2026-05-25: `exp05_trace_occam_r4_inout` checkpoint 144 scored `0.59` publicly, slightly above checkpoint 96 at `0.58`. This is better than the S4 boxed path but still below the `00-raw-1024` public baseline at about `0.62`. Both exp05 checkpoints have the same local generated-eval aggregate (`134/256`).
+
 ## Summary
 
-The external review is right about the main failure mode: the current 256-row generated eval and eval loss should not drive submissions. The strongest real baseline remains `00-raw-1024` at about `0.62` public, while `02-raw-full` and `04-s4` improved local diagnostics but hurt public score. S4 checkpoint-144 improved over the S4 final adapter (`0.55` vs `0.53`) but still did not approach the raw-answer baseline.
+The external review is right about the main failure mode: the current 256-row generated eval and eval loss should not drive submissions. The strongest real baseline remains `00-raw-1024` at about `0.62` public, while `02-raw-full` and `04-s4` improved local diagnostics but hurt public score. S4 checkpoint-144 improved over the S4 final adapter (`0.55` vs `0.53`) but still did not approach the raw-answer baseline. The later exp05 trace run scored `0.59` at checkpoint 144, which supports trace supervision as useful but not sufficient.
 
 The review is also right that the next useful direction is reasoning supervision, not more answer-only SFT. But the project goal is not to inspect or copy another active Nemotron challenge competitor's high-scoring notebook, GitHub repo, dataset, or submission path. Outside research is allowed as literature, tools, and inspiration, including papers, open-source code, Reddit/Medium/Substack posts, YouTube talks, other-domain competition ideas, and reasoning-challenge methods that are not from this exact Nemotron Kaggle challenge.
 

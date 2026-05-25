@@ -1,6 +1,6 @@
 # Project Decision Log
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 This file records durable project decisions. It is not a scratchpad.
 
@@ -209,6 +209,78 @@ Eval loss on final-answer SFT is not a reliable proxy for hidden reasoning score
 
 Active.
 
+## Decision: Reject Long Per-Position Cipher Citation Traces As A Submission Path
+
+### Context
+
+The `exp09_mamba_cipher_v3_synth2500_b20_ep3` run trained on 2,500 augmented cipher rows with long position-level citations. Teacher-forced validation looked excellent, with final eval loss around `0.088` and mean token accuracy around `0.973`.
+
+### Decision
+
+Do not submit or continue scaling this long per-position cipher trace style as-is. Future cipher traces should be shorter, target-only, and closer to the base model's natural word-alignment reasoning, while still ending with one boxed answer.
+
+### Evidence
+
+Final generated eval was `0/64 = 0.0` on cipher rows, with `63/64` max-token hits at `384` tokens. The final probe failed before and after training; after training the model copied the citation template but produced invalid citations and never reached a correct boxed answer. Public sanity outputs also repeated the cipher template on non-cipher binary prompts.
+
+### Consequence
+
+Treat low teacher-forced loss on trace text as insufficient. The next cipher dataset should minimize trace length and directly test whether generated outputs reach `Final answer` without max-token hits.
+
+### Status
+
+Active.
+
+## Decision: Use Compact Natural-Alignment Cipher Traces For The Next Cipher Probe
+
+### Context
+
+Before exp09 training, the base model's cipher probe naturally reasoned by aligning example words and deriving character mappings. It was too verbose and did not reach the target before max tokens, but the reasoning style itself was closer to the desired algorithm than the rigid position-citation template.
+
+### Decision
+
+Generate v4 cipher traces that imitate the useful natural alignment style: `We need to find mapping from cipher to plaintext`, explicitly align one example's cipher/plain words, map letters word by word with consistency notes, then apply target-needed mappings and produce one boxed final answer. Avoid `Thinking:/Category:` boilerplate and avoid per-position citations.
+
+### Evidence
+
+The exp09 v3 position trace achieved excellent teacher-forced loss but generated `0/64` correct cipher answers and hit max tokens on `63/64` generated-eval rows. The failure mode was template repetition and invalid citations, not lack of trace imitation.
+
+### Consequence
+
+The next cipher file is `data/input/traces/trace_cipher_v4_natural2500.csv`, and the matching notebook is `notebooks/08_colab_mamba_cipher_v4_natural_train_and_submit.ipynb`. Because v4 is longer than exp09, the notebook uses `MAX_SEQ_LENGTH=1024` with a smaller batch. The submit gate emphasizes generated outputs reaching a boxed answer without max-token hits.
+
+### Status
+
+Active.
+
+## Decision: Organize `data/input/` By Role
+
+### Context
+
+The input root accumulated official Kaggle files, trace datasets, verifier dependencies, and accidentally downloaded diagnostics. This made resume work slower and increased the risk of picking the wrong CSV.
+
+### Decision
+
+Use role-based subfolders:
+
+- `data/input/official/` for `train.csv` and `test.csv`
+- `data/input/traces/` for trainable trace CSVs
+- `data/input/verifier/` for local verifier/builder dependencies
+
+Downloaded diagnostics belong under `data/outputs/`, not `data/input/`.
+
+### Evidence
+
+The active workflow now has multiple trace generations (`trace_training.csv`, v2, all-hard, v3, v4), plus official data and bit-verifier audit data. Root-level input files were no longer easy to scan.
+
+### Consequence
+
+Script defaults and active notebook local fallbacks now point to subfolders. Colab `/content/*.csv` uploads remain unchanged.
+
+### Status
+
+Active.
+
 ## Decision: Persist Colab Training Outputs To Google Drive
 
 ### Context
@@ -255,6 +327,78 @@ Colab is responsible for training and producing one run bundle. The local reposi
 
 Active.
 
+## Decision: Treat Submission As Upload Plus Archive Intake
+
+### Context
+
+A Kaggle upload only needs a strict `submission.zip`, but the local dashboard,
+experiment history, and later decisions need diagnostics such as probe outputs,
+generated-eval summaries, run config, trainer logs, and public score metadata.
+During checkpoint submissions it is easy to upload the zip and forget the
+supporting files.
+
+### Decision
+
+When the user says a run or checkpoint is ready for submission, treat that as a
+small intake workflow, not only a zip-packaging action. First confirm or search
+for the upload artifact, then ask for missing dashboard/archive files:
+`run_config.json`, `trainer_log_history.csv`, `probe_evolution.csv`,
+`generated_eval_summary.csv`, `generated_eval_predictions.csv` when available,
+checkpoint eval summaries, and sanity raw predictions when available. If the
+public score is not known yet, archive as pending and update score metadata
+after Kaggle finishes.
+
+### Evidence
+
+Checkpoint-96 from `exp05_trace_occam_r4_inout` produced a valid Kaggle zip from
+Drive, while only `probe_evolution.csv` had been downloaded locally at first.
+The upload artifact was sufficient for Kaggle, but not sufficient for the local
+dashboard/history without follow-up artifact collection.
+
+### Consequence
+
+Future submission turns should include explicit questions about the run id,
+checkpoint, zip location, diagnostics availability, score status, and dashboard
+update timing. If only `submission.zip` exists, state that the Kaggle upload can
+proceed but the dashboard record is diagnostics-pending.
+
+### Status
+
+Active.
+
+## Decision: Compare Only The Submitted Checkpoint Step
+
+### Context
+
+Some submitted run archives include local diagnostics for multiple saved
+checkpoints. The S4 archives contain generated-eval rows for `checkpoint-96`,
+`checkpoint-144`, and `current-193`, even though only the final/current adapter
+and checkpoint-144 adapter were submitted as separate Kaggle uploads.
+
+### Decision
+
+Dashboard local diagnostic charts should filter multi-step diagnostics to the
+actual submitted or selected checkpoint step when the archive identifies one.
+Public-score charts still require Kaggle scores, but generated eval, probe, and
+loss charts may include pending runs when those local metrics exist.
+
+### Evidence
+
+The dashboard previously surfaced `04-s4-step-96`, which looked like a
+submitted run. Local files show it was only a diagnostic row inside S4 archives;
+the tracked S4 submitted checkpoint is `checkpoint-144`, while S4 final/current
+maps to step 193.
+
+### Consequence
+
+Submitted S4 final is labeled `04-s4-final`, submitted S4 checkpoint 144 is
+labeled `04-s4-step-144`, and exp05 trace checkpoint 96 is labeled
+`05-trace-step-96` with its available local generated-eval/probe/loss metrics.
+
+### Status
+
+Active.
+
 ## Decision: Do Not Continue Final-Answer Boxed SFT Without Procedural Supervision
 
 ### Context
@@ -272,6 +416,28 @@ The final/current S4 adapter had clean boxed outputs and local generated eval `9
 ### Consequence
 
 Boxed formatting helps extraction discipline but is not enough to improve reasoning. Checkpoint timing can matter, but the checkpoint-144 score does not change the main conclusion. Prioritize short procedural traces, solver-guided STaR bootstrapping, and better local validation over more S4-style final-answer boxed SFT.
+
+### Status
+
+Active.
+
+## Decision: Treat Exp05 Trace Occam As Useful But Not Sufficient
+
+### Context
+
+The `exp05_trace_occam_r4_inout` run trained on canonical trace targets with completion-only loss, LoRA rank 4 on `in_proj/out_proj`, LR `1e-4`, and Mamba-backed checkpoint evaluation. Checkpoint 96 scored `0.58` publicly. Checkpoint 144 scored `0.59` publicly and has the same local generated eval aggregate as checkpoint 96, `134/256 = 0.5234375`, while gaining one numeral row and losing one bit-manipulation row.
+
+### Decision
+
+Do not treat more steps on this exact trace mix as the main path to `0.7`. Keep checkpoint 144 as the current trace-supervision public baseline, then move the next research effort to better validation and better hard-family supervision.
+
+### Evidence
+
+Trace Occam improved over full-data raw SFT (`0.54`) and S4 boxed/attention variants (`0.53` and `0.55`), but it still did not beat the smaller raw-answer baseline at about `0.62`. Local diagnostics show unit conversion, gravity, and numeral are already strong, while cipher remains `0/40` and bit/equation remain near zero. Checkpoint 144's lower train/eval loss improved the public score slightly from `0.58` to `0.59`, but did not improve aggregate local generated eval over checkpoint 96.
+
+### Consequence
+
+The next serious work should build `eval_v2_grouped_family_balanced` and focus solver-guided STaR or verifier-backed traces on cipher, bit manipulation, and equation. Numeral should be excluded or downweighted in future score-seeking trace experiments because it is already saturated.
 
 ### Status
 
@@ -337,7 +503,7 @@ Answer-only SFT and boxed final-answer SFT did not improve reasoning enough. Cip
 
 ### Consequence
 
-The local trace builder writes `data/input/trace_training.csv` with the minimal model-facing schema: `id`, `question`, `trace`, and `gold_answer`. Accepted cipher rows use the deterministic compact/source-rich template mix; other families are expanded only when their traces are mechanically defensible. The next Colab notebook should load this file rather than rebuilding traces ad hoc.
+The local trace builder writes `data/input/traces/trace_training.csv` with the minimal model-facing schema: `id`, `question`, `trace`, and `gold_answer`. Accepted cipher rows use the deterministic compact/source-rich template mix; other families are expanded only when their traces are mechanically defensible. The next Colab notebook should load this file rather than rebuilding traces ad hoc.
 
 ### Status
 
@@ -381,7 +547,7 @@ The simple average of example-derived `g` estimates does not reproduce every gol
 
 ### Consequence
 
-`data/input/trace_training.csv` now has gravity formula traces for all gravity rows. This is the next mechanically verified family after cipher. Unit conversion follows the same rounding-aware principle in a separate mixed-template decision; bit manipulation and equation should remain boxed-only until real verifiers exist.
+`data/input/traces/trace_training.csv` now has gravity formula traces for all gravity rows. This is the next mechanically verified family after cipher. Unit conversion follows the same rounding-aware principle in a separate mixed-template decision; bit manipulation and equation should remain boxed-only until real verifiers exist.
 
 ### Status
 
@@ -403,7 +569,7 @@ All 1,594 unit conversion gold answers have two decimals. A 4-decimal target-com
 
 ### Consequence
 
-`data/input/trace_training.csv` now teaches the unit conversion procedure without making that already-strong family dominate the model with long traces. The remaining boxed-only families are bit manipulation, equation, and numeral; bit/equation should wait for real verifiers.
+`data/input/traces/trace_training.csv` now teaches the unit conversion procedure without making that already-strong family dominate the model with long traces. The remaining boxed-only families are bit manipulation, equation, and numeral; bit/equation should wait for real verifiers.
 
 ### Status
 
@@ -443,7 +609,7 @@ Audit candidate bit traces with a small 8-bit DSL verifier before using them for
 
 ### Evidence
 
-The verifier audited the bit rows and stores the accepted rules in `data/input/bit_candidate_trace_audit.csv`, because this file is a local builder dependency rather than a generated Colab output. After excluding the three public sanity IDs from training, the canonical trace CSV has 942 `bit_manipulation_verified_dsl_trace_boxed` rows and 658 boxed-only bit rows. Global audit still passes: every row has exactly one boxed answer, boxed text equals `gold_answer`, and traces contain no non-ASCII text.
+The verifier audited the bit rows and stores the accepted rules in `data/input/verifier/bit_candidate_trace_audit.csv`, because this file is a local builder dependency rather than a generated Colab output. After excluding the three public sanity IDs from training, the canonical trace CSV has 942 `bit_manipulation_verified_dsl_trace_boxed` rows and 658 boxed-only bit rows. Global audit still passes: every row has exactly one boxed answer, boxed text equals `gold_answer`, and traces contain no non-ASCII text.
 
 ### Consequence
 
@@ -470,6 +636,138 @@ Do not add equation reasoning traces from the current v0 DSL. Keep equation rows
 ### Consequence
 
 Equation remains the only fully boxed-only family. The next equation verifier should target length-changing string rules such as deletion/filtering, subsequence extraction, position selection, or numeric subtypes, and should still accept traces only when the rule reproduces every example and the gold target.
+
+### Status
+
+Active.
+
+## Decision: Use Strict Fix-Tracing V2 Before More Trace Volume
+
+### Context
+
+Exp05 trace supervision improved over the S4 boxed path but still scored only `0.59` at its best submitted checkpoint, below the older `00-raw-1024` baseline near `0.62`. Local diagnostics showed the trace run mainly learned unit conversion, gravity, and numerals, while cipher stayed `0/40`, bit manipulation stayed around `3/44`, and equation stayed around `2/39`.
+
+### Decision
+
+Run a small fix-tracing experiment before adding broader STaR data or changing LoRA capacity. Build `trace_training_v2_2500.csv` with strict cited-map cipher traces, explicit 8-bit bit-manipulation execution traces, and small rehearsal slices for equation, unit conversion, gravity, and numeral. Keep the exp05 model knobs mostly unchanged, but use two epochs because the curriculum has only 2,500 rows; choose the submitted adapter by checkpoint behavior rather than final step by default.
+
+### Evidence
+
+The previous cipher traces allowed unsupported phrase-context completion, which can teach plausible-looking but wrong mapping explanations. Current train data has only 605 strict high-evidence cipher candidates after excluding public sanity IDs, so the v2 file uses 600 of them rather than oversampling. The bit verifier has 942 valid DSL rows, enough to train 900 execution traces where the target rule is actually evaluated step by step. Local audit of the v2 CSV found exactly one boxed answer per row, zero official-style boxed mismatches, and no non-ASCII traces.
+
+### Consequence
+
+Notebook `05_colab_fix_tracing_train_and_submit.ipynb` is the next launch notebook for `exp06_fix_trace_v2_2500_ep2_r4_inout`. The submission gate is hard-family behavior: cipher should improve from `0/40`, bit manipulation should improve from `3/44`, easy families should not collapse, and extraction/max-token failures should remain controlled. After this run, return to `eval_v2_grouped_family_balanced` before drawing broader conclusions.
+
+### Status
+
+Active.
+
+## Decision: Separate Fused Mamba Training From 4-Bit Training
+
+### Context
+
+Installing `causal-conv1d` enables Nemotron's fused Mamba training path, but the first 4-bit fused-training attempt failed inside `mamba_split_conv1d_scan_combined(...)` with a matrix-shape error. The observed shape suggested a packed bitsandbytes projection weight was passed to a kernel expecting a normal dense matrix.
+
+### Decision
+
+Keep the practical 4-bit trace-training path in notebook `03` away from the fused `causal-conv1d` training kernel. Use notebook `04` only as the explicit fused-Mamba test path: dense BF16 base loading, no bitsandbytes quantization, attention-only LoRA targets, and a pre-training audit of `mixer.in_proj/out_proj` weights after LoRA is applied.
+
+### Evidence
+
+The current error matches a kernel/weight-layout incompatibility rather than a logical Mamba dimension choice. Mamba's inference speed and training speed come from different mechanisms, so fast fused training should be tested with dense Mamba projection weights before treating it as compatible with 4-bit LoRA training.
+
+### Consequence
+
+Notebook `04` is now configured as the fused-Mamba BF16 path and the active run name is `exp06_mamba_fused_bf16_attention_r4_trace_v2`. If it fails at model load or first training step due to memory, that is a BF16 feasibility result, not the same packed-weight shape failure. If it passes the projection audit and trains, fused Mamba training can be considered separately from the 4-bit production path.
+
+### Status
+
+Active.
+
+## Decision: Track Fast BF16 Mamba Attention Run Separately From Occam 4-Bit Run
+
+### Context
+
+The user modified the Mamba notebook in Colab and started a fast run on the strict v2 trace file. The run uses dense BF16 base weights with fused Mamba kernels and attention-only LoRA targets, not the 4-bit `in_proj/out_proj` Occam path. The Mamba projection audit prints `has_lora_A: False` for every `mixer.in_proj/out_proj`, which is expected for attention-only LoRA, but it does not by itself prove that LoRA adapters exist elsewhere.
+
+### Decision
+
+Update notebook `04_colab_mamba_trace_train_and_submit.ipynb` to the running configuration `exp06_mamba_fused_bf16_attention_r4_trace_v2`, and add a separate LoRA-module audit that fails if no adapter modules exist and prints trainable parameters. Track this run as a fast Mamba BF16 attention variant, while keeping notebook `05` as the clean 4-bit fix-tracing Occam baseline.
+
+### Evidence
+
+The Colab run successfully tokenized `2,244` train rows and `256` eval rows from `trace_training_v2_2500.csv`, passed the dense BF16 Mamba projection audit, passed completion-only label masking, and completed step `72/72`. The separate LoRA audit reported `466,944` trainable parameters on attention projections (`q_proj/k_proj/v_proj/o_proj`), confirming that the adapter is real even though `mixer.in_proj/out_proj` has no LoRA. Trainer metrics improved early in training: validation loss `1.442285 -> 1.173332 -> 0.920066`, and mean token accuracy `0.687889 -> 0.716699 -> 0.771873`. Final five-row probe accuracy was only `1/5`: gravity matched, but unit conversion invented the wrong rule, cipher skipped the cited-map behavior, bit manipulation produced a long wrong trace, and equation stayed wrong. The downloaded run bundle later showed full generated eval `36/256 = 0.140625`: bit `2/91`, cipher `0/65`, equation `1/30`, gravity `4/25`, numeral `11/15`, and unit conversion `18/30`.
+
+### Consequence
+
+This run produces valid LoRA weights for Kaggle because attention LoRA adapters are still standard PEFT adapter files, and a strict local `submission.zip` was built from the run bundle. The zip was submitted to Kaggle as an information-gathering run, with public score pending. However, the generated-answer eval is far below the exp05 trace checkpoints and the old raw baseline, so the evidence says the fast BF16 Mamba attention-LoRA path can train quickly but is not a good modeling direction in this configuration unless the public score unexpectedly contradicts local diagnostics.
+
+### Status
+
+Active.
+
+## Decision: Prepare All-Hard Trace V2 Dataset With Easy Rehearsal
+
+### Context
+
+The smaller `trace_training_v2_2500.csv` isolates trace quality with strict cipher and executable bit traces, but it excludes many hard-family rows. The user asked for a v2 trace-training file that includes all cipher, all bit-manipulation, all equation rows, and a small-to-medium percentage of the easier families.
+
+### Decision
+
+Create `trace_training_v2_all_hard_p25.csv` as a separate input file rather than overwriting the 2,500-row v2 file. Include all hard-family rows after excluding public sanity IDs: cipher, bit manipulation, and equation. Add deterministic 25% rehearsal slices from gravity, numeral, and unit conversion. Keep the target schema identical: `id`, `question`, `trace`, `gold_answer`.
+
+### Evidence
+
+The generated file has `5,921` rows: cipher `1,575`, bit manipulation `1,600`, equation `1,555`, gravity `399`, numeral `394`, and unit conversion `398`. The conservative trace policy avoids fake reasoning: strict cited-map traces for 605 cipher rows and boxed-only for 970 unsupported cipher rows; verified bit execution traces for 942 bit rows and boxed-only for 658 unverified bit rows; equation remains boxed-only until a real verifier exists. Local audit found exactly one boxed answer per row, zero official-style boxed mismatches, and no non-ASCII traces.
+
+### Consequence
+
+This file is prepared for a follow-up experiment such as `exp07_trace_v2_all_hard_p25`. It tests whether broad hard-family exposure plus easy-family rehearsal helps, but it is not pure procedural supervision because many hard rows are boxed-only. Generated eval by family remains the required selection gate.
+
+### Status
+
+Active.
+
+## Decision: Try Cipher-Only Position-Level Trace Probe
+
+### Context
+
+The fast Mamba v2-trace run completed training and produced valid attention LoRA weights, but the five-row final probe was only `1/5`. The cipher row was especially informative: the model skipped the cited-map template and guessed a plausible phrase instead of performing character alignment.
+
+### Decision
+
+Create a separate cipher-only dataset with a stricter trace style. Include only rows where every target character is supported by aligned example pairs. For each target word, cite each target character's source word pair and source position, then assemble the plaintext word explicitly. Do not include unsupported cipher rows with phrase-context completion.
+
+### Evidence
+
+`scripts/build_trace_training_v3_cipher_only.py` generated `data/input/traces/trace_training_v3_cipher_only.csv` with 605 rows. There were 1,575 cipher candidates after excluding public sanity IDs; 970 were rejected because at least one final-answer character was unsupported by examples. Local audit found exactly one boxed answer per row, zero boxed/gold mismatches, unique IDs, and no non-ASCII traces. Average trace length is about 1,517 characters, with max about 2,236 characters.
+
+### Consequence
+
+This is a narrow cipher-learning probe, not a balanced leaderboard candidate. Use `notebooks/06_colab_cipher_only_trace_train_and_submit.ipynb`, which keeps `EVAL_ROWS=64`, max seq `1024`, max new `512`, LoRA `r=4` on `in_proj/out_proj`, LR `1e-4`, and 3 epochs. Judge success by cipher generated eval rather than overall public score. If it teaches alignment, the style can be mixed back into a balanced curriculum; if it fails, the problem is not just trace wording.
+
+### Status
+
+Active.
+
+## Decision: Run Augmented Cipher V3 Synth Dataset Through Lightweight Mamba Notebook
+
+### Context
+
+The strict 605-row cipher-only dataset is clean but small. The user generated an augmented cipher dataset with existing prompt structure and 2,500 rows. The prior Mamba run showed that dense BF16 fused-Mamba training can fit in memory and train quickly, but generation callbacks during training add runtime overhead and can obscure whether the SFT objective itself is learning.
+
+### Decision
+
+Rename the augmented CSV to `trace_cipher_v3_synth2500.csv`, validate it, and create a dedicated Mamba notebook `07_colab_mamba_cipher_synth_train_and_submit.ipynb` for `exp09_mamba_cipher_v3_synth2500_b20_ep3`. Use batch size `20`, gradient accumulation `4`, epochs `3`, and attention LoRA targets `q_proj/k_proj/v_proj/o_proj`. During training, register only a lightweight trainer-log callback on `on_log`; do not register the generation callback with `on_log`/`on_save`.
+
+### Evidence
+
+The CSV audit passed: 2,500 rows, columns `id/question/trace/gold_answer`, all rows classified as cipher, unique IDs, every trace starts with `Thinking:\nCategory: cipher.`, exactly one boxed final answer per row, zero boxed/gold mismatches, zero unsupported target-character rows under the aligned-example verifier, and no non-ASCII traces. The local file hash matches the downloaded file hash.
+
+### Consequence
+
+This run isolates whether larger cipher-only position-trace data can teach character alignment. It is still a cipher-only curriculum, so even if cipher improves it may hurt non-cipher public behavior. Final generated eval and public sanity cipher output should decide whether to mix this data back into a balanced run.
 
 ### Status
 

@@ -156,7 +156,7 @@ def write_rows(path: Path, rows: list[dict[str, str]]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--train-csv", type=Path, default=Path("data/input/train.csv"))
+    parser.add_argument("--train-csv", type=Path, default=Path("data/input/official/train.csv"))
     parser.add_argument(
         "--audit-csv",
         type=Path,

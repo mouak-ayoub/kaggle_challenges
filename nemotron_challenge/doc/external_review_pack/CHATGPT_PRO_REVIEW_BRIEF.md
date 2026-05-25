@@ -2,6 +2,8 @@
 
 Date prepared: 2026-05-18
 
+Latest local update: 2026-05-25. Exp05 trace Occam checkpoint 144 scored `0.59` publicly, slightly above checkpoint 96 at `0.58`. Both checkpoints have the same local generated-eval aggregate, `134/256 = 0.5234375`.
+
 ## Request To Reviewer
 
 Please review the experiment history below as an independent technical critic.
@@ -130,6 +132,8 @@ The probe is too small for score estimation. It is used to track behavior change
 | `2026-05-17_colab_raw_full_r4_score_0_54`                 | 0.54         | Colab               | Nemotron LoRA SFT raw-answer full-data control             | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`       | raw           | 512     | 64      | 9244       | 4      | 32         | 0.1          | `in_proj`, `out_proj`                       | 48              | 3e-4   | scored |
 | `2026-05-17_colab_s4_attention_boxed_r8_final_score_0_53` | 0.53         | Colab               | S4 expanded-attention private-reasoning boxed final adapter | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`       | boxed         | 512     | 128     | 9244       | 8      | 64         | 0.1          | `in_proj`, `out_proj`, `q_proj`, `k_proj`, `v_proj`, `o_proj` | 48 | 3e-4 | scored |
 | `2026-05-17_colab_s4_checkpoint144_score_0_55`             | 0.55         | Colab checkpoint    | S4 checkpoint-144 candidate adapter                         | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`       | boxed         | 512     | 128     | 9244       | 8      | 64         | 0.1          | `o_proj`, `in_proj`, `out_proj`, `v_proj`, `q_proj`, `k_proj` | 48 | 3e-4 | scored |
+| `2026-05-25_exp05_trace_occam_checkpoint96_mamba_score_0_58` | 0.58       | Colab checkpoint    | Exp05 trace Occam checkpoint-96 adapter                      | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`       | trace/boxed   | 512     | 384     | 9241       | 4      | 32         | 0.05         | `out_proj`, `in_proj`                       | 48              | 1e-4   | scored |
+| `2026-05-25_exp05_trace_occam_checkpoint144_mamba_score_0_59` | 0.59       | Colab checkpoint    | Exp05 trace Occam checkpoint-144 adapter                     | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`       | trace/boxed   | 512     | 384     | 9241       | 4      | 32         | 0.05         | `out_proj`, `in_proj`                       | 48              | 1e-4   | scored |
 
 ## Main Training Config Details
 
@@ -279,8 +283,10 @@ Status:
 | `02-raw-full` | 0.54 |
 | `04-s4`       | 0.53 |
 | `04-s4-step-144` | 0.55 |
+| `05-trace-step-96` | 0.58 |
+| `05-trace-step-144` | 0.59 |
 
-The S4 checkpoint-144 candidate scored `0.55`, so checkpoint timing improved S4 slightly but did not close the gap to the 0.62 raw baseline.
+The S4 checkpoint-144 candidate scored `0.55`, so checkpoint timing improved S4 slightly but did not close the gap to the 0.62 raw baseline. Exp05 trace checkpoint 144 scored `0.59`, improving over S4 and checkpoint 96 but still below the raw 0.62 baseline.
 
 ## Local Generated Eval Results
 
@@ -293,6 +299,8 @@ All rows below use the same fixed 256-row generated-eval split.
 | `04-s4-step-96` | 79 | 256 | 0.30859375 |
 | `04-s4-step-144` | 90 | 256 | 0.3515625 |
 | `04-s4-step-193` | 95 | 256 | 0.37109375 |
+| `05-trace-step-96` | 134 | 256 | 0.5234375 |
+| `05-trace-step-144` | 134 | 256 | 0.5234375 |
 
 Same values as percentages:
 
@@ -303,19 +311,21 @@ Same values as percentages:
 | `04-s4-step-96` | 30.859375% |
 | `04-s4-step-144` | 35.15625% |
 | `04-s4-step-193` | 37.109375% |
+| `05-trace-step-96` | 52.34375% |
+| `05-trace-step-144` | 52.34375% |
 
 ## Local Generated Eval By Family
 
 Percent accuracy by inferred family:
 
-| family | `00-raw-1024` | `02-raw-full` | `04-s4-step-96` | `04-s4-step-144` | `04-s4-step-193` |
-|--------|---------------|---------------|-----------------|------------------|------------------|
-| bit_manipulation | 4.4444% | 24.4444% | 13.3333% | 22.2222% | 31.1111% |
-| cipher | 0.0000% | 9.3023% | 11.6279% | 16.2791% | 11.6279% |
-| equation | 5.1282% | 12.8205% | 12.8205% | 15.3846% | 12.8205% |
-| gravity | 2.4390% | 4.8780% | 2.4390% | 2.4390% | 4.8780% |
-| numeral | 100.0000% | 100.0000% | 100.0000% | 100.0000% | 100.0000% |
-| unit_conversion | 22.2222% | 36.1111% | 27.7778% | 38.8889% | 47.2222% |
+| family | `00-raw-1024` | `02-raw-full` | `04-s4-step-96` | `04-s4-step-144` | `04-s4-step-193` | `05-trace-step-96` | `05-trace-step-144` |
+|--------|---------------|---------------|-----------------|------------------|------------------|--------------------|---------------------|
+| bit_manipulation | 4.4444% | 24.4444% | 13.3333% | 22.2222% | 31.1111% | 6.8182% | 4.5455% |
+| cipher | 0.0000% | 9.3023% | 11.6279% | 16.2791% | 11.6279% | 0.0000% | 0.0000% |
+| equation | 5.1282% | 12.8205% | 12.8205% | 15.3846% | 12.8205% | 5.1282% | 5.1282% |
+| gravity | 2.4390% | 4.8780% | 2.4390% | 2.4390% | 4.8780% | 93.1818% | 93.1818% |
+| numeral | 100.0000% | 100.0000% | 100.0000% | 100.0000% | 100.0000% | 97.8261% | 100.0000% |
+| unit_conversion | 22.2222% | 36.1111% | 27.7778% | 38.8889% | 47.2222% | 100.0000% | 100.0000% |
 
 Family row counts in the 256-row generated eval:
 
@@ -328,6 +338,8 @@ Family row counts in the 256-row generated eval:
 | numeral | 52 |
 | unit_conversion | 36 |
 
+The exp05 checkpoint evaluator uses the trace-training family labels for the same 256-row sampled split, yielding counts: bit manipulation 44, cipher 40, equation 39, gravity 44, numeral 46, unit conversion 43.
+
 ## Probe Results
 
 Probe match rate on the fixed 5-row probe set:
@@ -339,6 +351,8 @@ Probe match rate on the fixed 5-row probe set:
 | `04-s4-step-96` | 2 | 5 | 0.40 |
 | `04-s4-step-144` | 2 | 5 | 0.40 |
 | `04-s4-step-193` | 1 | 5 | 0.20 |
+| `05-trace-step-96` | 3 | 5 | 0.60 |
+| `05-trace-step-144` | 3 | 5 | 0.60 |
 
 ## Training And Eval Loss Points
 
@@ -350,6 +364,8 @@ Available loss values from archived logs:
 | `04-s4-step-96` | 2.3756311734517417 | 0.7917672395706177 |
 | `04-s4-step-144` | 2.2357492446899414 | 0.7761566638946533 |
 | `04-s4-step-193` | 2.4857180946231505 | 0.7694065570831299 |
+| `05-trace-step-96` | 0.603294 | 0.250652 |
+| `05-trace-step-144` | 0.495269 | 0.237810 |
 
 ## Public Test Sanity Responses
 
