@@ -75,6 +75,14 @@ def to_number(value: Any) -> float | None:
         return None
 
 
+def has_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, float) and math.isnan(value):
+        return False
+    return str(value).strip() != ""
+
+
 def to_int(value: Any) -> int | None:
     number = to_number(value)
     if number is None or not math.isfinite(number):
@@ -331,6 +339,58 @@ def probe_summary_from_metadata(metadata: dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+RUN_CONFIG_KEYS = [
+    "experiment_name",
+    "model_name",
+    "train_target_format",
+    "max_seq_length",
+    "max_new_tokens",
+    "train_rows",
+    "lora_r",
+    "lora_alpha",
+    "lora_dropout",
+    "lora_target_modules",
+    "batch_size",
+    "grad_accum_steps",
+    "effective_batch_size",
+    "learning_rate",
+]
+
+
+def registry_row_for_submission(path: Path, metadata: dict[str, Any]) -> dict[str, Any]:
+    registry_path = path.parent / "submissions_registry.csv"
+    if not registry_path.exists():
+        return {}
+    try:
+        registry = pd.read_csv(registry_path)
+    except Exception:
+        return {}
+    if "id" not in registry.columns:
+        return {}
+    submission_id = str(metadata.get("id") or path.name)
+    matched = registry[registry["id"].astype(str) == submission_id]
+    if not len(matched):
+        return {}
+    return {key: value for key, value in matched.iloc[0].to_dict().items() if has_value(value)}
+
+
+def enrich_submission_metadata_from_registry(path: Path, metadata: dict[str, Any], run_config: dict[str, Any]) -> None:
+    registry_row = registry_row_for_submission(path, metadata)
+    if not registry_row:
+        return
+    for key, value in registry_row.items():
+        if not has_value(metadata.get(key)):
+            metadata[key] = value
+    for key in RUN_CONFIG_KEYS:
+        value = registry_row.get(key)
+        if not has_value(value) or has_value(run_config.get(key)):
+            continue
+        if key == "lora_target_modules" and isinstance(value, str):
+            run_config[key] = [item for item in value.split("|") if item]
+        else:
+            run_config[key] = value
+
+
 def trainer_tail_from_metadata(metadata: dict[str, Any]) -> pd.DataFrame:
     rows = metadata.get("trainer_tail")
     if not rows:
@@ -360,6 +420,7 @@ def load_submission_experiment(path: Path) -> Experiment:
     run_config = dir_run_config or run_config
     frames.update(dir_frames)
     files.update(dir_files)
+    enrich_submission_metadata_from_registry(path, metadata, run_config)
 
     if "generated_eval_summary" not in frames:
         generated_eval = generated_eval_from_metadata(metadata)
@@ -649,7 +710,9 @@ def overview_table(experiments: list[Experiment]) -> pd.DataFrame:
         target = cfg.get("train_target_format") or exp.metadata.get("train_target_format")
         if not target and "trace" in f"{method_text} {description_text}".lower():
             target = "trace_column_boxed"
-        adapter = exp.metadata.get("adapter_config", {}) if isinstance(exp.metadata.get("adapter_config"), dict) else {}
+        adapter = exp.metadata.get("adapter_config")
+        if not isinstance(adapter, dict):
+            adapter = exp.metadata.get("adapter") if isinstance(exp.metadata.get("adapter"), dict) else {}
         modules = cfg.get("lora_target_modules") or adapter.get("target_modules")
         if isinstance(modules, list):
             modules_text = "|".join(str(item) for item in modules)
@@ -657,6 +720,7 @@ def overview_table(experiments: list[Experiment]) -> pd.DataFrame:
             modules_text = modules
         rows.append(
             {
+                "label": experiment_code(exp),
                 "experiment": exp.name,
                 "score": exp.score_public,
                 "submitted_to_kaggle": is_kaggle_submitted_experiment(exp),
@@ -685,7 +749,7 @@ def is_kaggle_submitted_experiment(exp: Experiment) -> bool:
         return True
     if to_number(exp.score_public) is not None:
         return True
-    if status in {"submitted", "pending_score", "scored"}:
+    if status in {"submitted", "pending_score", "submitted_pending_score", "scored"}:
         return True
     return False
 
@@ -762,6 +826,13 @@ def sanity_comparison_table(experiments: list[Experiment]) -> pd.DataFrame:
 
 def experiment_code(exp: Experiment) -> str:
     text = f"{exp.name} {exp.method or ''}".lower()
+    if "exp11_mamba_trace_v2_aug25k" in text or "exp11 broad 25k" in text:
+        step = submitted_step(exp)
+        return f"11-v2-step-{step}" if step is not None else "11-v2"
+    if "exp10_mamba_cipher_v4" in text:
+        return "10-cipher-v4"
+    if "exp09_mamba_cipher_v3" in text:
+        return "09-cipher-v3"
     if "exp06_mamba_fused" in text or "fused-mamba" in text:
         return "06-mamba"
     if "exp05_trace_occam" in text or "trace occam" in text:
@@ -819,7 +890,9 @@ def run_legend_table(experiments: list[Experiment]) -> pd.DataFrame:
         target = cfg.get("train_target_format") or exp.metadata.get("train_target_format")
         if not target and "trace" in f"{method_text} {description_text}".lower():
             target = "trace_column_boxed"
-        adapter = exp.metadata.get("adapter_config", {}) if isinstance(exp.metadata.get("adapter_config"), dict) else {}
+        adapter = exp.metadata.get("adapter_config")
+        if not isinstance(adapter, dict):
+            adapter = exp.metadata.get("adapter") if isinstance(exp.metadata.get("adapter"), dict) else {}
         modules = cfg.get("lora_target_modules") or adapter.get("target_modules")
         if isinstance(modules, list):
             modules_text = "/".join(str(item) for item in modules)
@@ -1067,12 +1140,16 @@ def generated_eval_family_charts(labels: list[str], families: list[str], family_
         return '<p class="muted">No family chart data.</p>'
     parts = ["<div class='small-chart-grid'>"]
     for family in families:
+        values = family_values.get(family, {})
+        family_labels = [label for label in labels if label in values]
+        if not family_labels:
+            continue
         parts.append("<div class='small-chart-card'>")
         parts.append(f"<h3>{escape(family)}</h3>")
         parts.append(
             svg_category_line_chart(
-                labels,
-                [("accuracy (%)", family_values.get(family, {}))],
+                family_labels,
+                [("accuracy (%)", values)],
                 "accuracy (%)",
                 compact=True,
             )

@@ -1,6 +1,6 @@
 # Project Decision Log
 
-Last updated: 2026-05-25
+Last updated: 2026-05-27
 
 This file records durable project decisions. It is not a scratchpad.
 
@@ -21,6 +21,28 @@ Public community material suggests multiple heterogeneous problem families. A si
 ### Consequence
 
 The initial repository contains documentation, project memory, and lightweight reusable utilities rather than model training code.
+
+### Status
+
+Active.
+
+## Decision: Do Not Keep Scaling V2 Trace Supervision As-Is
+
+### Context
+
+The project tested broad v2 trace supervision at two scales. `exp06_mamba_fused_bf16_attention_r4_trace_v2` used the 2,500-row v2 curriculum and scored `0.58`. `exp11_mamba_trace_v2_aug25k_b8_ep1` used the 25k augmented v2 curriculum; checkpoints 195 and 585 scored `0.56`, while checkpoints 390 and 780 scored `0.54`.
+
+### Decision
+
+Do not continue the current v2 trace format as the main scaling direction. Keep its useful parts, especially compact stopping behavior and easy-family rehearsal, but redesign the hard-family traces before another large run.
+
+### Evidence
+
+The exp11 step-205 generated eval had zero empty answers and zero max-token hits, showing the model learned the output format. But generated-answer accuracy was only `21/64 = 0.328125`, with bit manipulation `0/20` and cipher `8/26`. Checkpoint 195 had weaker backfill generated eval than checkpoint 390 (`11/64 = 0.171875` vs `17/64 = 0.265625`) but scored higher publicly (`0.56` vs `0.54`); checkpoint 585 also scored `0.56`, while checkpoint 780 returned to `0.54` without archived generated-eval diagnostics yet. The small generated eval is not a reliable checkpoint selector. These public scores are below exp05 checkpoint144 at `0.59` and below the raw partial baseline at `0.62`. Error inspection showed bit traces taught execution of a stated rule, not search for the rule, and cipher traces taught citation style without reliable ordered character alignment.
+
+### Consequence
+
+The next broad dataset should not simply add more v2 rows. It should use hard-family trace designs that teach the missing operation: bit rule-search before execution, cipher ordered word/position alignment, and equation candidate-transform selection. Natural cipher traces remain useful as an ingredient, but the exp10 cipher-only score `0.49` shows that single-family cipher fine-tuning is not a leaderboard-safe path.
 
 ### Status
 
@@ -248,6 +270,28 @@ The exp09 v3 position trace achieved excellent teacher-forced loss but generated
 ### Consequence
 
 The next cipher file is `data/input/traces/trace_cipher_v4_natural2500.csv`, and the matching notebook is `notebooks/08_colab_mamba_cipher_v4_natural_train_and_submit.ipynb`. Because v4 is longer than exp09, the notebook uses `MAX_SEQ_LENGTH=1024` with a smaller batch. The submit gate emphasizes generated outputs reaching a boxed answer without max-token hits.
+
+### Status
+
+Active.
+
+## Decision: Add Ordered Alignment To The Next Cipher Trace Revision
+
+### Context
+
+The `exp10_mamba_cipher_v4_natural2500_b12_seq1024_ep3` run reinforced the base model's natural cipher alignment style. It was interrupted before normal final packaging, but the in-memory adapter was saved into a run bundle and evaluated locally.
+
+### Decision
+
+Keep natural alignment as the cipher trace direction, but do not scale v4 unchanged. The next cipher trace revision should preserve the v4 wording while adding compact ordered alignment lines such as `ynz -> the gives y->t, n->h, z->e` and target assembly lines such as `cipher: y z x w n z j` / `plain: t e a c h e r`.
+
+### Evidence
+
+Exp10 improved generated cipher behavior from exp09's `0/64` and `63/64` max-token hits to `26/64 = 0.40625` on a 64-row cipher generated eval, with `6/64` max-token hits. It also reached a boxed answer on the fixed probe instead of looping. However, that probe still failed: for `ynz -> the`, the model used `y->h, n->t` instead of the ordered mapping `y->t, n->h`, producing `hatter creates chase` instead of `teacher creates castle`. The run remains verbose, averaging `787` generated tokens.
+
+### Consequence
+
+Exp10 scored `0.49`, so cipher-only natural-alignment training is not leaderboard-safe. V5 should target shorter outputs and ordered character execution inside a broad all-family curriculum rather than more long natural explanation or another cipher-only run.
 
 ### Status
 
