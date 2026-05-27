@@ -4,7 +4,7 @@ This repository is for a gradual Kaggle workflow around the NVIDIA Nemotron Mode
 
 The project has moved past bootstrap into Colab LoRA experiments. The current focus is keeping the training and artifact workflow simple enough to trust while testing better supervision methods such as short traces and STaR-like bootstrapping.
 
-Latest tracked public result: `exp11_mamba_trace_v2_aug25k_b8_ep1` checkpoints 195 and 585 both scored `0.56`, while checkpoints 390 and 780 both scored `0.54`. These remain below `exp05_trace_occam_r4_inout` checkpoint 144 at `0.59` and below the earlier `00-raw-1024` baseline at about `0.62`. The latest evidence says scaled v2 traces improve output discipline but do not yet teach enough hard-family rule inference, and the small generated eval can be anti-correlated with public score across checkpoints.
+Latest tracked public result: `exp12_mamba_trace_v2_aug25k_inout_qkvo_r4_ep1` scored `0.54` despite the strongest recent broad local generated eval at `36/64 = 0.5625`. Earlier `exp11_mamba_trace_v2_aug25k_b8_ep1` checkpoints 195 and 585 scored `0.56`, while checkpoints 390 and 780 also scored `0.54`. These remain below `exp05_trace_occam_r4_inout` checkpoint 144 at `0.59` and below the earlier `00-raw-1024` baseline at about `0.62`, so the current v2 trace format and all-six projection target test are not sufficient.
 
 ## Current Milestone
 
