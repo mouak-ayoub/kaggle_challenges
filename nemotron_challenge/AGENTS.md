@@ -8,18 +8,20 @@ Read these files at the start of each session:
 
 1. `doc/AGENT_RUN_PROTOCOL.md`
 2. `doc/STRATEGY_ESCALATION.md`
-3. `doc/POST_TRAINING_METHOD_LADDER.md`
-4. `doc/EXPERIMENT_CHECKLIST.md`
-5. `doc/SUBMISSION_TRACKING.md`
-6. `doc/LOCAL_PROJECT_MEMORY.md`
-7. `doc/PROJECT_DECISION_LOG.md`
-8. `doc/errors.md`
-9. `README.md`
+3. `doc/AUTONOMY_POLICY.md`
+4. `doc/POST_TRAINING_METHOD_LADDER.md`
+5. `doc/EXPERIMENT_CHECKLIST.md`
+6. `doc/SUBMISSION_TRACKING.md`
+7. `doc/LOCAL_PROJECT_MEMORY.md`
+8. `doc/PROJECT_DECISION_LOG.md`
+9. `doc/errors.md`
+10. `README.md`
 
 Use them for different purposes:
 
 - `doc/AGENT_RUN_PROTOCOL.md`: post-run, score, bundle, and submission bookkeeping.
 - `doc/STRATEGY_ESCALATION.md`: guidance for score stagnation and method changes.
+- `doc/AUTONOMY_POLICY.md`: bounded autonomy; strict for bookkeeping and flexible for strategy.
 - `doc/POST_TRAINING_METHOD_LADDER.md`: idea backlog and method proposal source; do not treat it as a fixed checklist.
 - `doc/EXPERIMENT_CHECKLIST.md`: current experiment checklist and archive expectations.
 - `doc/SUBMISSION_TRACKING.md`: Kaggle submission archive and scoring registry expectations.
