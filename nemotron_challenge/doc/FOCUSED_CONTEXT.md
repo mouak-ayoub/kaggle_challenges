@@ -22,6 +22,17 @@ Read:
 
 Do not invent a new workflow shape when a known-good local pattern exists. If the edit intentionally changes the pattern, state the reason and the invariant being preserved.
 
+## Research-state or next-step answers
+
+Read:
+
+- `doc/EVIDENCE_FRESHNESS_PROTOCOL.md`
+- `doc/LOCAL_PROJECT_MEMORY.md`
+- `doc/PROJECT_DECISION_LOG.md`
+- relevant run outputs or user-provided fresh evidence, if available
+
+Use freshest evidence first. Do not answer only from committed docs when the user reports a newer local or Colab result.
+
 ## Run result reviews
 
 Read:
@@ -36,6 +47,7 @@ Read:
 
 Read:
 
+- `doc/EVIDENCE_FRESHNESS_PROTOCOL.md`
 - `doc/AUTONOMY_POLICY.md`
 - `doc/STRATEGY_ESCALATION.md`
 - `doc/POST_TRAINING_METHOD_LADDER.md`
