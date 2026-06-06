@@ -15,6 +15,16 @@ Use this protocol when the user mentions:
 - a new experiment archive
 - a failed or interrupted run
 
+## Local Output Boundary
+
+`data/outputs/` is local generated state and is ignored by git. It contains run diagnostics, dashboard inputs, submission archives, and the detailed local submission registry:
+
+```text
+data/outputs/submissions/submissions_registry.csv
+```
+
+Update that local registry when it exists, but do not commit `data/outputs/` and do not recreate a second tracked registry under `doc/`. Git-tracked docs should summarize durable facts and decisions, not duplicate the local artifact database.
+
 ## Step 1: Identify The Run
 
 Collect or infer:
@@ -74,8 +84,9 @@ After every serious run, update:
 2. `doc/SUBMISSION_TRACKING.md` if a Kaggle submission was scored
 3. `doc/LOCAL_PROJECT_MEMORY.md`
 4. `doc/PROJECT_DECISION_LOG.md` if the result changes a durable decision
-5. `doc/EXPERIMENT_REGISTRY.csv` for all serious runs if present
-6. `data/outputs/submissions/submissions_registry.csv` for scored Kaggle submissions if present
+5. `data/outputs/submissions/submissions_registry.csv` for scored Kaggle submissions if present
+
+Do not create a committed registry CSV under `doc/` for run results. The local ignored `submissions_registry.csv` is the detailed machine-readable result registry; git-tracked docs carry summaries and decisions.
 
 If a method-ladder file exists, do not rewrite it as a checklist. Add only a short note when a ladder idea was tested, rejected, or promoted into the decision log.
 

@@ -47,6 +47,7 @@ Use them for different purposes:
 - Treat problem type/category as a first-class dimension in reports.
 - Save raw model completions before extracting answers.
 - Track answer extraction failures separately from reasoning failures.
+- Treat `data/outputs/` as local ignored result state. It may contain run bundles, dashboards, submission archives, and `data/outputs/submissions/submissions_registry.csv`. Do not commit it, and do not create tracked duplicate result registries under `doc/`. Summarize durable lessons in docs instead.
 
 ## Notebook Policy
 

@@ -79,7 +79,7 @@ Planned layout:
 - `data/input/official/`: official Kaggle files such as `train.csv` and `test.csv`
 - `data/input/traces/`: trainable trace CSVs such as `trace_training.csv` and experiment-specific trace datasets
 - `data/input/verifier/`: local verifier/builder dependencies such as `bit_candidate_trace_audit.csv`
-- `data/outputs/`: local run diagnostics, submission archives, and reports
+- `data/outputs/`: local run diagnostics, submission archives, reports, dashboards, and `data/outputs/submissions/submissions_registry.csv`; ignored by git and not committed
 - `data/reference/`: local external references such as pulled Kaggle notebooks
 - `doc/`: project memory, decisions, and important error notes
 - `notebooks/`: exploration and visual reports
