@@ -23,6 +23,20 @@ Be proposal-driven for research strategy:
 - mark it as `new proposal` until a diagnostic or run supports it;
 - promote it to `PROJECT_DECISION_LOG.md` only after evidence exists.
 
+## Precedent Boundary
+
+Be creative about research methods, not careless about working infrastructure.
+
+For notebooks, data builders, training flows, submission flows, and artifact handling:
+
+- inspect the closest working predecessor before editing;
+- reuse the same operational pattern by default;
+- state any intentional deviation and why it is safer or better;
+- do not introduce broad fallback machinery when a previous simple pattern works;
+- do not silently change persistence, resume, archive, or output-location behavior.
+
+The goal is not to freeze the code. The goal is to make innovation explicit and keep proven workflow invariants intact.
+
 ## When Strategy Is Uncertain
 
 Report:
