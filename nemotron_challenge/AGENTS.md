@@ -6,17 +6,27 @@
 
 Read these files at the start of each session:
 
-1. `doc/LOCAL_PROJECT_MEMORY.md`
-2. `doc/PROJECT_DECISION_LOG.md`
-3. `doc/errors.md`
-4. `README.md`
+1. `doc/AGENT_RUN_PROTOCOL.md`
+2. `doc/STRATEGY_ESCALATION.md`
+3. `doc/POST_TRAINING_METHOD_LADDER.md`
+4. `doc/EXPERIMENT_CHECKLIST.md`
+5. `doc/SUBMISSION_TRACKING.md`
+6. `doc/LOCAL_PROJECT_MEMORY.md`
+7. `doc/PROJECT_DECISION_LOG.md`
+8. `doc/errors.md`
+9. `README.md`
 
 Use them for different purposes:
 
-- `doc/LOCAL_PROJECT_MEMORY.md`: current project state, active work, recent milestones
-- `doc/PROJECT_DECISION_LOG.md`: durable project-specific decisions
-- `doc/errors.md`: non-trivial errors and the fixes or lessons learned
-- `README.md`: broader architecture, roadmap, and challenge context
+- `doc/AGENT_RUN_PROTOCOL.md`: post-run, score, bundle, and submission bookkeeping.
+- `doc/STRATEGY_ESCALATION.md`: guidance for score stagnation and method changes.
+- `doc/POST_TRAINING_METHOD_LADDER.md`: idea backlog and method proposal source; do not treat it as a fixed checklist.
+- `doc/EXPERIMENT_CHECKLIST.md`: current experiment checklist and archive expectations.
+- `doc/SUBMISSION_TRACKING.md`: Kaggle submission archive and scoring registry expectations.
+- `doc/LOCAL_PROJECT_MEMORY.md`: current project state, active work, recent milestones.
+- `doc/PROJECT_DECISION_LOG.md`: durable project-specific decisions.
+- `doc/errors.md`: non-trivial errors and the fixes or lessons learned.
+- `README.md`: broader architecture, roadmap, and challenge context.
 
 ## Working Rules
 
@@ -26,6 +36,7 @@ Use them for different purposes:
 - After each milestone or important workflow change, run a short Occam audit before moving on: check active notebooks, scripts, and docs for stale switches, duplicated outputs, unclear artifact paths, and complex branches that can be replaced by one explicit path.
 - Keep the audit principle-based, not checklist-based. Specific fixes from the current run are examples; the durable rule is to prefer one coherent path, remove speculative branches, and keep boundaries clear.
 - Occam's razor does not mean deleting useful material or minimizing file count at any cost. It means choosing the minimum non-trivial structure that preserves evidence, keeps intent clear, and avoids speculative complexity.
+- Occam's razor does not mean staying conservative forever. If repeated runs are stagnant, use `doc/STRATEGY_ESCALATION.md` to propose method changes, not only hyperparameter changes.
 - Keep code simple by default. Do not add broad edge-case handling, fallback branches, or clever abstractions before the project has actually hit that case.
 - Keep notebook configuration in one small top cell until there is a clear reason to move it elsewhere. Do not scatter model names, LoRA settings, path constants, and generation settings across many cells.
 - Prefer one clear path that works over several partially supported paths. Add complexity only after a concrete failure or repeated need.
@@ -43,6 +54,7 @@ Use them for different purposes:
 - Use separate batch notebooks for category-level summaries and error maps.
 - Temporary prompt experiments may stay notebook-local at first.
 - Move stable prompt templates, parsers, validators, and scoring helpers into `src/` later only when the user asks to refactor.
+- Do not manually edit `.ipynb` JSON unless necessary. Prefer paired `.py` or notebook-aware tooling. If editing directly, validate the notebook JSON before stopping.
 
 ## Memory Update Policy
 
@@ -52,12 +64,14 @@ Update `doc/LOCAL_PROJECT_MEMORY.md` when:
 - a baseline is reproduced
 - a new active category is chosen
 - a milestone is completed
+- an experiment result changes the next recommended action
 
 Update `doc/PROJECT_DECISION_LOG.md` when:
 
 - a method decision becomes durable
 - an approach is explicitly superseded
 - there is evidence that a method is or is not sufficient
+- a strategy escalation changes the project direction
 
 Decision-log entries should contain:
 
