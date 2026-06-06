@@ -17,6 +17,7 @@ Use them for different purposes:
 
 - `doc/FOCUSED_CONTEXT.md`: decides which extra docs are relevant for the current task.
 - `doc/AUTONOMY_POLICY.md`: bounded autonomy; strict for bookkeeping and flexible for strategy.
+- `doc/EVIDENCE_FRESHNESS_PROTOCOL.md`: required before research-state or next-step answers; use freshest evidence, not stale committed notes.
 - `doc/PRECEDENT_FIRST_EDITING.md`: required before notebook/workflow edits; reuse known-good patterns before inventing new ones.
 - `doc/AGENT_RUN_PROTOCOL.md`: post-run, score, bundle, and submission bookkeeping.
 - `doc/STRATEGY_ESCALATION.md`: guidance for score stagnation and method changes.
@@ -29,6 +30,8 @@ Use them for different purposes:
 ## Working Rules
 
 - Be critical of experiment proposals, even when the same idea is raised repeatedly. Separate what was exactly tested from what only sounds similar; say clearly when evidence supports an idea, when evidence contradicts it, and when the right answer is "not tested yet." Do not loosely accept a proposal just because it is plausible, and do not reject a proposal using evidence from a materially different experiment.
+- Use the freshest available evidence for research-state and next-step answers. If local/user-provided evidence is newer than committed docs, say committed docs may be stale and answer from the newer evidence.
+- Do not recommend a run or experiment as the next step when the user says it already ran, unless proposing a deliberate rerun with changed conditions.
 - Use Occam's razor: start with the simplest coherent change that can explain or fix the observed problem. Add complexity only when the simple path fails with evidence.
 - Treat Occam's razor as the guiding principle after repeated notebook iterations: when a config switch or fallback is no longer needed, remove it rather than documenting around it.
 - After each milestone or important workflow change, run a short Occam audit before moving on: check active notebooks, scripts, and docs for stale switches, duplicated outputs, unclear artifact paths, and complex branches that can be replaced by one explicit path.
