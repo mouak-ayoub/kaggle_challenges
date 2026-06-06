@@ -394,3 +394,28 @@ Training speed and autoregressive generation speed are different bottlenecks. Lo
 Lesson:
 
 For fast Mamba experiments, default checkpoint/final generated eval to a smaller fixed sample such as 64 rows, then run the full 256-row eval only for a candidate that passes the smaller family-level gate. Keep raw completions and family summaries so a short eval remains diagnostic rather than only a scalar.
+
+## vLLM Notebook EngineCore Fails After CUDA Is Initialized
+
+Symptom:
+
+```text
+WARNING ... We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'. Reasons: CUDA is initialized
+RuntimeError: Engine core initialization failed. See root cause above.
+```
+
+Cause:
+
+In Colab/Jupyter, earlier diagnostics or imports can touch CUDA before `LLM(...)` is constructed. vLLM then switches the worker multiprocessing mode to `spawn`; this can fail inside notebook execution even when the vLLM/PyTorch binary stack is otherwise correct.
+
+Lesson:
+
+For notebook `11`, use the notebook-safe single-process vLLM path before importing `vllm`:
+
+```python
+import os
+os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+from vllm import LLM, SamplingParams
+```
+
+If the failed `LLM(...)` cell has already run, restart the runtime before retrying. Also avoid running Torch CUDA diagnostics before constructing the vLLM model.
