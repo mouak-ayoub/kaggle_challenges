@@ -56,26 +56,37 @@ Done when:
 - a small diagnostic is proposed when uncertainty is high;
 - exact notebook or file changes are listed.
 
-## Notebook edit
+## Notebook or workflow edit
 
-Goal: modify a notebook workflow without corrupting `.ipynb` JSON.
+Goal: modify a notebook or workflow while preserving proven local patterns.
 
 Context:
 
 - `AGENTS.md`
+- `doc/PRECEDENT_FIRST_EDITING.md`
 - relevant notebook section or paired `.py` file
+- the closest working predecessor notebook/script
 - `doc/errors.md` if the task is a bug fix
+
+Before editing, write:
+
+- precedent used;
+- intended delta;
+- invariants that must be preserved;
+- intentional deviations, if any.
 
 Constraints:
 
 - prefer paired `.py` or notebook-aware tooling;
 - keep active configuration in one top cell;
 - do not scatter constants across cells;
+- do not invent broad fallback machinery when a previous simple pattern works;
 - validate the notebook if edited directly.
 
 Done when:
 
 - notebook remains valid;
 - changed cells are listed;
-- any mirrored local/Colab helper change is noted;
+- same-shape behavior inherited from the precedent is listed;
+- intentional deviations are listed with reasons;
 - commands or validation steps are reported.
