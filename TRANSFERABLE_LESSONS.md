@@ -112,3 +112,21 @@ Typical example:
 - Stage B: perform the final extraction or prediction
 
 This is especially useful when domain shift is driven by acquisition conditions rather than label semantics.
+
+### Escalate method class when evidence shows a plateau
+
+Do not keep spending compute on variants of the same method class after repeated clean failures.
+
+A useful post-training ladder is:
+- SFT / instruction fine-tuning when imitation and format learning are enough
+- rejection sampling plus SFT when outputs are verifiable and direct SFT plateaus
+- preference optimization when reliable preferred/rejected pairs exist
+- online RL / verifier-reward learning when the verifier is strong and offline data construction is not enough
+
+The decision to move up the ladder should be evidence-based:
+- public score or validation metric is flat across clean attempts
+- raw generations repeat the same failure mode
+- teacher-forced loss improves without generated behavior improving
+- the next idea only changes scale, capacity, epochs, or another knob without changing the failure mechanism
+
+When this happens, stop the current method class, preserve the negative result, and run a small diagnostic for the next method class before another expensive full run.

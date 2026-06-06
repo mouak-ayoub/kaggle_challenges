@@ -371,7 +371,9 @@ def registry_row_for_submission(path: Path, metadata: dict[str, Any]) -> dict[st
     matched = registry[registry["id"].astype(str) == submission_id]
     if not len(matched):
         return {}
-    return {key: value for key, value in matched.iloc[0].to_dict().items() if has_value(value)}
+    row = {key: value for key, value in matched.iloc[0].to_dict().items() if has_value(value)}
+    row["__registry_index"] = int(matched.index[0])
+    return row
 
 
 def enrich_submission_metadata_from_registry(path: Path, metadata: dict[str, Any], run_config: dict[str, Any]) -> None:
@@ -479,11 +481,20 @@ def load_run_bundle_experiment(path: Path) -> Experiment:
 
 def experiment_order_key(exp: Experiment) -> tuple[str, str]:
     metadata = exp.metadata or {}
+    registry_index = to_int(metadata.get("__registry_index"))
+    if registry_index is not None:
+        return f"registry-{registry_index:06d}", exp.path.name
+    sortable_name = re.sub(
+        r"(checkpoint[-_]?)(\d+)",
+        lambda match: f"{match.group(1)}{int(match.group(2)):06d}",
+        exp.path.name,
+        flags=re.IGNORECASE,
+    )
     for key in ["created_at", "archived_at", "archive_date", "submitted_at", "scored_at"]:
         value = metadata.get(key)
         if value:
-            return str(value), exp.path.name
-    return exp.path.name, exp.name
+            return str(value), sortable_name
+    return sortable_name, exp.name
 
 
 def discover_experiments(output_root: Path) -> list[Experiment]:
@@ -494,19 +505,28 @@ def discover_experiments(output_root: Path) -> list[Experiment]:
             load_submission_experiment(path)
             for path in sorted(p for p in submissions_dir.iterdir() if p.is_dir())
         ]
+        submission_experiments = [
+            exp
+            for exp in submission_experiments
+            if is_kaggle_submitted_experiment(exp)
+        ]
         experiments.extend(sorted(submission_experiments, key=experiment_order_key))
 
     run_roots = [output_root / "experiments", output_root / "runs"]
     for root in run_roots:
         if root.exists():
             for path in sorted(p for p in root.iterdir() if p.is_dir()):
-                experiments.append(load_run_dir_experiment(path))
+                exp = load_run_dir_experiment(path)
+                if is_kaggle_submitted_experiment(exp):
+                    experiments.append(exp)
 
     bundle_roots = [output_root / "run_bundles", output_root]
     for root in bundle_roots:
         if root.exists():
             for path in sorted(root.glob("*run_bundle.zip")):
-                experiments.append(load_run_bundle_experiment(path))
+                exp = load_run_bundle_experiment(path)
+                if is_kaggle_submitted_experiment(exp):
+                    experiments.append(exp)
 
     return experiments
 
@@ -825,7 +845,18 @@ def sanity_comparison_table(experiments: list[Experiment]) -> pd.DataFrame:
 
 
 def experiment_code(exp: Experiment) -> str:
-    text = f"{exp.name} {exp.method or ''}".lower()
+    metadata_id = str((exp.metadata or {}).get("id", ""))
+    text = f"{exp.name} {exp.method or ''} {metadata_id}".lower()
+    if "exp12_mamba_trace_v2_aug25k_5k_inout_vo" in text:
+        step = submitted_step(exp)
+        if step is not None:
+            return f"12-5k-vo-step-{step}"
+        return "12-5k-vo"
+    if "exp12_mamba_trace_v2_aug25k_inout_qkvo" in text:
+        step = submitted_step(exp)
+        if step is not None:
+            return f"12-25k-all6-step-{step}"
+        return "12-25k-all6"
     if "exp11_mamba_trace_v2_aug25k" in text or "exp11 broad 25k" in text:
         step = submitted_step(exp)
         return f"11-v2-step-{step}" if step is not None else "11-v2"

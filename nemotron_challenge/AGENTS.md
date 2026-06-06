@@ -20,6 +20,7 @@ Use them for different purposes:
 
 ## Working Rules
 
+- Be critical of experiment proposals, even when the same idea is raised repeatedly. Separate what was exactly tested from what only sounds similar; say clearly when evidence supports an idea, when evidence contradicts it, and when the right answer is "not tested yet." Do not loosely accept a proposal just because it is plausible, and do not reject a proposal using evidence from a materially different experiment.
 - Use Occam's razor: start with the simplest coherent change that can explain or fix the observed problem. Add complexity only when the simple path fails with evidence.
 - Treat Occam's razor as the guiding principle after repeated notebook iterations: when a config switch or fallback is no longer needed, remove it rather than documenting around it.
 - After each milestone or important workflow change, run a short Occam audit before moving on: check active notebooks, scripts, and docs for stale switches, duplicated outputs, unclear artifact paths, and complex branches that can be replaced by one explicit path.

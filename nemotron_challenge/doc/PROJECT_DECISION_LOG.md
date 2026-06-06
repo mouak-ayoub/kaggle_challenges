@@ -1,6 +1,6 @@
 # Project Decision Log
 
-Last updated: 2026-05-27
+Last updated: 2026-06-06
 
 This file records durable project decisions. It is not a scratchpad.
 
@@ -30,7 +30,7 @@ Active.
 
 ### Context
 
-The project tested broad v2 trace supervision at two scales. `exp06_mamba_fused_bf16_attention_r4_trace_v2` used the 2,500-row v2 curriculum and scored `0.58`. `exp11_mamba_trace_v2_aug25k_b8_ep1` used the 25k augmented v2 curriculum; checkpoints 195 and 585 scored `0.56`, while checkpoints 390 and 780 scored `0.54`.
+The project tested broad v2 trace supervision at several scales and capacities. `exp06_mamba_fused_bf16_attention_r4_trace_v2` used the 2,500-row v2 curriculum and scored `0.58`. `exp11_mamba_trace_v2_aug25k_b8_ep1` used the 25k augmented v2 curriculum; checkpoints 195 and 585 scored `0.56`, while checkpoints 390 and 780 scored `0.54`. `exp13_trace_v2_aug25k_10k_inout_r25_ep1` increased clean Mamba `in_proj/out_proj` capacity to LoRA rank 25 on a 10k-row v2 slice, but both checkpoint 78 and final step 313 scored `0.57`.
 
 ### Decision
 
@@ -38,11 +38,86 @@ Do not continue the current v2 trace format as the main scaling direction. Keep 
 
 ### Evidence
 
-The exp11 step-205 generated eval had zero empty answers and zero max-token hits, showing the model learned the output format. But generated-answer accuracy was only `21/64 = 0.328125`, with bit manipulation `0/20` and cipher `8/26`. Checkpoint 195 had weaker backfill generated eval than checkpoint 390 (`11/64 = 0.171875` vs `17/64 = 0.265625`) but scored higher publicly (`0.56` vs `0.54`); checkpoint 585 also scored `0.56`, while checkpoint 780 returned to `0.54`. The small generated eval is not a reliable checkpoint selector. These public scores are below exp05 checkpoint144 at `0.59` and below the raw partial baseline at `0.62`. Error inspection showed bit traces taught execution of a stated rule, not search for the rule, and cipher traces taught citation style without reliable ordered character alignment. A later exp12 target-surface test with the same broad v2 data and all six projection targets improved local generated eval to `36/64 = 0.5625`, especially cipher `18/26`, but public score returned only `0.54`. This reinforces the decision: stronger small local generated eval is not enough evidence to keep scaling the current v2 trace format.
+The exp11 step-205 generated eval had zero empty answers and zero max-token hits, showing the model learned the output format. But generated-answer accuracy was only `21/64 = 0.328125`, with bit manipulation `0/20` and cipher `8/26`. Checkpoint 195 had weaker backfill generated eval than checkpoint 390 (`11/64 = 0.171875` vs `17/64 = 0.265625`) but scored higher publicly (`0.56` vs `0.54`); checkpoint 585 also scored `0.56`, while checkpoint 780 returned to `0.54`. The small generated eval is not a reliable checkpoint selector. These public scores are below exp05 checkpoint144 at `0.59` and below the raw partial baseline at `0.62`. Error inspection showed bit traces taught execution of a stated rule, not search for the rule, and cipher traces taught citation style without reliable ordered character alignment. A later exp12 target-surface test with the same broad v2 data and all six projection targets improved local generated eval to `36/64 = 0.5625`, especially cipher `18/26`, but public score returned only `0.54`. Exp13 final generated eval was also locally strong at `35/64 = 0.546875`, with cipher `18/26`, but public score returned `0.57`. This reinforces the decision: stronger small local generated eval and more LoRA capacity are not enough evidence to keep scaling the current v2 trace format.
 
 ### Consequence
 
 The next broad dataset should not simply add more v2 rows. It should use hard-family trace designs that teach the missing operation: bit rule-search before execution, cipher ordered word/position alignment, and equation candidate-transform selection. Natural cipher traces remain useful as an ingredient, but the exp10 cipher-only score `0.49` shows that single-family cipher fine-tuning is not a leaderboard-safe path.
+
+### Status
+
+Active.
+
+## Decision: Try Offline Rejection Sampling As The Next Data Builder
+
+### Context
+
+The project has tried raw-answer SFT, hand-authored/verified trace SFT, larger v2 trace datasets, cipher-only traces, and LoRA capacity/target changes. These runs improved some local generated metrics and output discipline, but none has beaten the earlier raw partial baseline around `0.62`. The current v2 trace format is specifically marked insufficient as a scaling path.
+
+### Decision
+
+Use a separate notebook-first offline rejection-sampling pass before another broad SFT run. Generate multiple candidate reasoning completions for official train rows using the base model or a selected teacher adapter, save every raw completion, accept only candidates whose extracted final answer verifies against `gold_answer`, apply simple quality gates, and write a normal `id/question/trace/gold_answer` CSV for the existing LoRA training notebooks.
+
+Keep this as supervised fine-tuning data construction, not online RL, DPO, or inference-time agent execution. Do not hide weak hard-family coverage behind boxed-only fallbacks unless the acceptance diagnostics justify a separate mixed-control run.
+
+### Evidence
+
+The evidence supports changing the data-building mechanism, not yet trusting rejection sampling as a scoring method. Prior trace runs often learned templates and teacher-forced targets without leaderboard gains. The useful untested hypothesis is that model-native successful trajectories may be more learnable than fully synthetic templates, provided they are filtered by answer correctness and inspected by family.
+
+### Consequence
+
+`notebooks/11_colab_rejection_sampling_data_builder.ipynb` is the proposal artifact. The first useful result is not a Kaggle submission; it is an acceptance report by family, raw accepted traces for manual inspection, and a small accepted-trace CSV. Only if hard families have non-trivial accepted coverage and traces are short enough should the existing training notebook consume the CSV for an adapter run.
+
+### Status
+
+Active, untested.
+
+## Decision: Limit Offline Sampling To Cipher And Bit Manipulation First
+
+### Context
+
+The project is moving from template trace SFT toward filtered model-native traces. The broad current v2 trace format did not beat the raw partial baseline, but not every family has the same failure mode. Cipher and bit manipulation remain the hardest families and have repeatedly shown template-learning or rule-execution failures. Gravity, unit conversion, and numeral already have deterministic traces or sparse traces that are mechanically checked and have given useful procedural signal. Equation is still boxed-only because the available same-length verifier had zero coverage.
+
+### Decision
+
+Run offline rejection sampling only for cipher and bit manipulation in the next data-builder pass, using vLLM as the generation backend for throughput. Keep all other families on the existing deterministic template or boxed-control path for this experiment. Save every raw sampled completion, accept only candidates whose extracted answer verifies against `gold_answer`, and report separate acceptance coverage for cipher and bit manipulation before training.
+
+This is a data-construction decision, not a change to the LoRA submission format and not online RL. Equation stays out of this first sampling pass for Occam reasons; that should not be recorded as evidence that equation is solved.
+
+### Evidence
+
+Prior experiments showed that the hard-family templates were insufficient: bit traces often taught execution of a stated rule rather than rule search, and cipher traces taught style without consistently learning ordered alignment. The non-hard families have lower-risk deterministic supervision already available, while expanding sampling to every family would add compute, raw-output volume, and selection complexity without directly targeting the observed bottleneck.
+
+### Consequence
+
+Notebook `11` or its successor should filter the official train rows to cipher and bit manipulation before sampling. The resulting training CSV should be a mixed source: accepted sampled traces for those two families where available, and the current deterministic template or boxed-control rows for the rest. The first gate remains acceptance quality and coverage by hard family; if acceptance is near zero or traces are too long, stop before another expensive adapter run and improve the sampler prompt or verifier.
+
+### Status
+
+Active, untested.
+
+## Decision: Use A Post-Training Method Ladder When Stuck
+
+### Context
+
+The project spent substantial compute on SFT variants: raw answers, boxed answers, hand-built trace supervision, larger v2 trace data, cipher-only traces, target-module changes, and capacity changes. Several runs improved teacher-forced loss or small local generated evals, but the public score remained below the older raw partial baseline around `0.62`. The user pointed to a post-training lecture that moves from pure SFT to rejection sampling, preference optimization, and RL as methods for escaping this kind of plateau.
+
+### Decision
+
+Keep `doc/POST_TRAINING_METHOD_LADDER.md` as the method-escalation reference. When a method class is stuck, do not keep spending compute on scale/rank/epoch variations unless the failure mechanism has changed. Use the ladder:
+
+- SFT / IFT for simple imitation and format learning.
+- rejection sampling plus SFT when direct SFT is stuck and we can verify outputs.
+- DPO or other preference optimization when we have reliable preferred/rejected pairs.
+- online RL/RLVR when verifiers are strong enough and offline data construction is not enough.
+
+### Evidence
+
+Current evidence says more vanilla SFT is not enough: low or improving loss repeatedly failed to translate into leaderboard gains, and long/template traces often taught style without reliable generated reasoning. Rejection sampling is the next smallest method change because it still ends in ordinary SFT, but changes the data source from external templates to filtered model-native successful traces.
+
+### Consequence
+
+Before another expensive run, ask which rung we are on and what evidence would stop it. If two clean attempts in the same method class show flat public score, repeated hard-family failure, or only teacher-forced improvement, recommend stopping that direction and moving to the next rung or adding the missing verifier. For the current phase, run the rejection-sampling data builder first; if hard-family accepted coverage is near zero, stop before training and improve the proposal generator or verifier-guided repair.
 
 ### Status
 
@@ -745,7 +820,7 @@ The Colab run successfully tokenized `2,244` train rows and `256` eval rows from
 
 ### Consequence
 
-This run produces valid LoRA weights for Kaggle because attention LoRA adapters are still standard PEFT adapter files, and a strict local `submission.zip` was built from the run bundle. The zip was submitted to Kaggle as an information-gathering run, with public score pending. However, the generated-answer eval is far below the exp05 trace checkpoints and the old raw baseline, so the evidence says the fast BF16 Mamba attention-LoRA path can train quickly but is not a good modeling direction in this configuration unless the public score unexpectedly contradicts local diagnostics.
+This run produced valid LoRA weights for Kaggle because attention LoRA adapters are still standard PEFT adapter files, and a strict local `submission.zip` was built from the run bundle. Kaggle public score returned `0.58`, close to exp05 checkpoint96 but still below exp05 checkpoint144 and the old raw baseline. Because the generated-answer eval was far below the exp05 trace checkpoints and the old raw baseline, the evidence says the fast BF16 Mamba attention-LoRA path can train quickly but is not a good modeling direction in this configuration.
 
 ### Status
 
