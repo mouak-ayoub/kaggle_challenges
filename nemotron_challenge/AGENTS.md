@@ -4,29 +4,25 @@
 
 ## Session Start Protocol
 
-Read these files at the start of each session:
+Always read these small router/state files first:
 
-1. `doc/AGENT_RUN_PROTOCOL.md`
-2. `doc/STRATEGY_ESCALATION.md`
-3. `doc/AUTONOMY_POLICY.md`
-4. `doc/POST_TRAINING_METHOD_LADDER.md`
-5. `doc/EXPERIMENT_CHECKLIST.md`
-6. `doc/SUBMISSION_TRACKING.md`
-7. `doc/LOCAL_PROJECT_MEMORY.md`
-8. `doc/PROJECT_DECISION_LOG.md`
-9. `doc/errors.md`
-10. `README.md`
+1. `doc/FOCUSED_CONTEXT.md`
+2. `doc/AUTONOMY_POLICY.md`
+3. `doc/LOCAL_PROJECT_MEMORY.md`
+4. `doc/PROJECT_DECISION_LOG.md`
+
+Then read task-specific files according to `doc/FOCUSED_CONTEXT.md`. Do not load every project note for every task.
 
 Use them for different purposes:
 
+- `doc/FOCUSED_CONTEXT.md`: decides which extra docs are relevant for the current task.
+- `doc/AUTONOMY_POLICY.md`: bounded autonomy; strict for bookkeeping and flexible for strategy.
+- `doc/PRECEDENT_FIRST_EDITING.md`: required before notebook/workflow edits; reuse known-good patterns before inventing new ones.
 - `doc/AGENT_RUN_PROTOCOL.md`: post-run, score, bundle, and submission bookkeeping.
 - `doc/STRATEGY_ESCALATION.md`: guidance for score stagnation and method changes.
-- `doc/AUTONOMY_POLICY.md`: bounded autonomy; strict for bookkeeping and flexible for strategy.
 - `doc/POST_TRAINING_METHOD_LADDER.md`: idea backlog and method proposal source; do not treat it as a fixed checklist.
 - `doc/EXPERIMENT_CHECKLIST.md`: current experiment checklist and archive expectations.
 - `doc/SUBMISSION_TRACKING.md`: Kaggle submission archive and scoring registry expectations.
-- `doc/LOCAL_PROJECT_MEMORY.md`: current project state, active work, recent milestones.
-- `doc/PROJECT_DECISION_LOG.md`: durable project-specific decisions.
 - `doc/errors.md`: non-trivial errors and the fixes or lessons learned.
 - `README.md`: broader architecture, roadmap, and challenge context.
 
@@ -39,6 +35,8 @@ Use them for different purposes:
 - Keep the audit principle-based, not checklist-based. Specific fixes from the current run are examples; the durable rule is to prefer one coherent path, remove speculative branches, and keep boundaries clear.
 - Occam's razor does not mean deleting useful material or minimizing file count at any cost. It means choosing the minimum non-trivial structure that preserves evidence, keeps intent clear, and avoids speculative complexity.
 - Occam's razor does not mean staying conservative forever. If repeated runs are stagnant, use `doc/STRATEGY_ESCALATION.md` to propose method changes, not only hyperparameter changes.
+- Use precedent-first editing for notebooks and workflow code: inspect the nearest working predecessor, reuse the same shape by default, and state any intentional deviation before or during the edit.
+- Do not solve recurring workflow misses by adding dozens of tiny rules. Add or refine a precedent/invariant rule instead.
 - Keep code simple by default. Do not add broad edge-case handling, fallback branches, or clever abstractions before the project has actually hit that case.
 - Keep notebook configuration in one small top cell until there is a clear reason to move it elsewhere. Do not scatter model names, LoRA settings, path constants, and generation settings across many cells.
 - Prefer one clear path that works over several partially supported paths. Add complexity only after a concrete failure or repeated need.
@@ -57,7 +55,9 @@ Use them for different purposes:
 - Use separate batch notebooks for category-level summaries and error maps.
 - Temporary prompt experiments may stay notebook-local at first.
 - Move stable prompt templates, parsers, validators, and scoring helpers into `src/` later only when the user asks to refactor.
+- Before editing any notebook workflow cell, follow `doc/PRECEDENT_FIRST_EDITING.md`.
 - Do not manually edit `.ipynb` JSON unless necessary. Prefer paired `.py` or notebook-aware tooling. If editing directly, validate the notebook JSON before stopping.
+- After editing, report the precedent used, what stayed same-shape, what intentionally changed, and what validation ran.
 
 ## Memory Update Policy
 
