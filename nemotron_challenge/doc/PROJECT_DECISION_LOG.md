@@ -70,7 +70,7 @@ The evidence supports changing the data-building mechanism, not yet trusting rej
 
 ### Status
 
-Active, untested.
+Superseded for free-form base-model sampling by `exp14_rs_hard_vllm_cipher_bit_v1`. Constrained/verifier-guided rejection sampling remains active as the next data-construction direction.
 
 ## Decision: Limit Offline Sampling To Cipher And Bit Manipulation First
 
@@ -94,7 +94,31 @@ Notebook `11` or its successor should filter the official train rows to cipher a
 
 ### Status
 
-Active, untested.
+Superseded for unconstrained vLLM trace sampling. The hard-family focus remains active, but the next attempt should constrain the candidate space or use programmatic verifiers before training.
+
+## Decision: Stop Free-Form Base-Model Rejection Sampling For Cipher
+
+### Context
+
+The project tried offline vLLM rejection sampling on the two hardest families after vanilla SFT, deterministic trace SFT, broad v2 trace scaling, and LoRA capacity changes failed to beat the raw partial baseline. The goal was to sample model-native successful traces, filter them by exact gold-answer verification, and use accepted traces as better SFT data.
+
+### Decision
+
+Do not keep scaling free-form base-model rejection sampling for cipher, and do not train on the current exp14 accepted set. Because exp18 also produced zero accepted cipher rows after vocabulary and word-length hints, move the immediate next cipher diagnostic to STaR-style answer-conditioned rationale generation on training rows. Keep constrained candidate generation, multiple-choice/verifier selection, or deterministic solver-generated compact traces as the fallback if the answer-conditioned rationales are low-quality. For bit manipulation, prefer programmatic candidate-rule search or an expanded DSL verifier over model-written rule explanations.
+
+### Evidence
+
+Full `exp14_rs_hard_vllm_cipher_bit_v1` sampled `4` candidates per row over all available cipher and bit-manipulation training rows. Bit manipulation produced `77/6400` correct raw candidates but only `2` accepted/selected rows after quality gates; cipher produced only `2/6300` correct raw candidates and `0` accepted/selected rows. Max-token hits dominated both families: bit `5924/6400`, cipher `5524/6300`. The downloaded diagnostic zip is archived under `data/outputs/downloaded_diagnostics/2026-06-06_exp14_rs_hard_vllm_cipher_bit_v1_useful_negative/` with SHA-256 `699697e1eb1237ccaa48d53438e5bf48ebe708d8afb79db52456d513441ac954`.
+
+A follow-up `exp18_cipher_hinted_rs_test_v1` tried to rescue cipher sampling with plaintext vocabulary hints, word lengths, `16` candidates per row, and `1000` max tokens on `100` cipher rows. It produced `0/1600` correct candidates, `0` clean accepted rows, and `1600/1600` max-token hits. This is stronger evidence than the original exp14 cipher failure because it tested the obvious "give it more hints and more tokens" variant. Attached method guidance on 2026-06-06 framed this correctly: RFT works only when the frozen model has non-trivial probability `p` of generating correct samples; when `p` is near zero, the next step is not blind scaling, but conditioning, scaffolding, search, or distillation.
+
+### Consequence
+
+The next useful experiment is not another free-form vLLM sampling run. Run `exp19_cipher_bit_star_rationale_probe_v4` in notebook `12_colab_star_rationale_data_builder.ipynb`: for a balanced `32`-row probe covering cipher and bit manipulation training rows, provide the known gold answer and ask the frozen model to generate a short mechanical rationale that reaches it. For cipher, filter for target-word support, exactly one boxed answer, no text after the box, and manageable length. The archived v2 result selected `13/16` cipher rows and `2/16` bit rows, but the selected cipher traces were weak proofs: they usually aligned one example word, left `Target:` as raw encrypted text, and jumped to the gold phrase. A stricter target-word-pair gate would reject all `13` accepted v2 cipher rows. Both selected bit rows were logically invalid. For bit manipulation, accept this only as a rationale-quality probe; if v4 still accepts invented or self-contradicting bit rules, switch to a candidate DSL/rule-search diagnostic that emits traces only for rules reproducing every example and the gold target. This is STaR-style data construction, not RFT, because the answer is supplied after open sampling failed. If cipher rationale quality remains poor, then build a constrained cipher diagnostic that parses examples, target word lengths, and mapping consistency to generate candidate plaintext phrases or multiple-choice candidates before any training. If these diagnostics provide meaningful coverage, mix compact verified/filtered hard-family traces with the existing deterministic easy-family rehearsal in a normal SFT notebook.
+
+### Status
+
+Active.
 
 ## Decision: Use A Post-Training Method Ladder When Stuck
 

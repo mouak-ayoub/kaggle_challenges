@@ -419,3 +419,39 @@ from vllm import LLM, SamplingParams
 ```
 
 If the failed `LLM(...)` cell has already run, restart the runtime before retrying. Also avoid running Torch CUDA diagnostics before constructing the vLLM model.
+
+## vLLM 0.12 Fails On `sys.stdout.fileno()` In Colab
+
+Symptom:
+
+```text
+UnsupportedOperation: fileno
+...
+stdout_fd = sys.stdout.fileno()
+...
+ipykernel/iostream.py in fileno(self)
+```
+
+Cause:
+
+In vLLM `0.12.0`, model initialization can call `vllm.utils.system_utils.suppress_stdout()` while creating the distributed CPU coordination group. Colab's `ipykernel` stdout object does not expose `fileno()`, so the suppressor fails before the model loads. This can happen even with `VLLM_ENABLE_V1_MULTIPROCESSING=0` set correctly before importing vLLM.
+
+Lesson:
+
+Before `LLM(...)`, patch both vLLM suppressor references to a notebook-safe no-op:
+
+```python
+from contextlib import contextmanager
+
+@contextmanager
+def notebook_safe_suppress_stdout():
+    yield
+
+import vllm.distributed.parallel_state as vllm_parallel_state
+import vllm.utils.system_utils as vllm_system_utils
+
+vllm_system_utils.suppress_stdout = notebook_safe_suppress_stdout
+vllm_parallel_state.suppress_stdout = notebook_safe_suppress_stdout
+```
+
+If the failed `LLM(...)` cell already ran, restart the Colab runtime before retrying because distributed state and GPU allocations may be partially initialized.
